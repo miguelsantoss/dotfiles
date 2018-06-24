@@ -87,7 +87,7 @@ format-padding    = 1
 label=%percentage%%
 label-padding = 1
 
-format-background = ${colors.ylw}
+format-background = ${colors.blu}
 format-foreground = ${colors.bg}
 
 [module/volume]
@@ -148,39 +148,6 @@ format-padding    = 1
 scroll-up         = exec wscycle.sh -f
 scroll-down       = exec wscycle.sh -r
 
-[module/bspwm]
-type = internal/bspwm
-
-pin-workspaces = true
-inline-mode = false
-enable-click = true
-enable-scroll = false
-reverse-scroll = false
-fuzzy-match = false
-
-format-background = ${xrdb:color0}
-format-padding = 2
-
-label-focused = ✕
-label-focused-background = ${xrdb:color0}
-# label-focused-foreground = ${xrdb:foreground}
-label-focused-padding    = 1
-
-label-occupied = •
-label-occupied-background = ${xrdb:color0}
-# label-occupied-foreground = ${xrdb:foreground}
-label-occupied-padding    = 1
-
-label-urgent = •
-label-urgent-background = ${xrdb:color0}
-label-urgent-foreground = ${colors.red}
-label-urgent-padding    = 1
-
-label-empty = •
-label-empty-background = ${xrdb:color0}
-label-empty-foreground = ${xrdb:color11}
-label-empty-padding    = 1
-
 [module/battery]
 type          = internal/battery
 full-at       = 98
@@ -202,7 +169,7 @@ format-full-padding    = 1
 
 format-charging-background = ${colors.grn}
 format-discharging-background = ${colors.red}
-format-full-background    = ${colors.ylw}
+format-full-background    = ${colors.cyn}
 
 format-charging-foreground = ${colors.bg}
 format-discharging-foreground = ${colors.bg}
@@ -218,26 +185,26 @@ format-full-foreground    = ${colors.bg}
 	format          = <label-state> <label-mode>
   label-monitor   = %name%
 
-	label-mode-background = ${xrdb:background}
-	label-mode-foreground = ${xrdb:foreground}
+	label-mode-background = ${colors.bg}
+	label-mode-foreground = ${colors.fg}
 	label-mode-padding    = 2
 
 	label-focused            = %name%
-	label-focused-background = ${xrdb:color5}
-	label-focused-foreground = ${xrdb:background}
+	label-focused-background = ${colors.blu}
+	label-focused-foreground = ${colors.bg}
 	label-focused-padding    = 2
 
 	label-occupied            = %name%
-	label-occupied-background = ${xrdb:background}
-	label-occupied-foreground = ${xrdb:foreground}
+	label-occupied-background = ${colors.bg}
+	label-occupied-foreground = ${colors.fg}
 	label-occupied-padding    = 2
 
 	label-empty            = %name%
-	label-empty-background = ${xrdb:background}
-	label-empty-foreground = ${xrdb:foreground}
+	label-empty-background = ${colors.bg}
+	label-empty-foreground = ${colors.fg}
 	label-empty-padding    = 2
 
 	label-urgent            = %name%
-	label-urgent-background = ${xrdb:background}
-	label-urgent-foreground = ${xrdb:foreground}
+	label-urgent-background = ${colors.bg}
+	label-urgent-foreground = ${colors.fg}
 	label-urgent-padding    = 2
