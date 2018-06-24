@@ -1,0 +1,28 @@
+#!/bin/sh
+xrdb ~/.Xresources
+
+# allow ctrl s in terminal
+stty -ixon
+~/bin/hdmi-off
+xsetroot -cursor_name left_ptr
+
+
+xset +fp ~/.fonts
+xset +fp ~/.fonts/bitmap
+xset fp rehash
+
+dunst &
+compton --config ~/.config/compton.conf -b &
+[ ! -s ~/.mpd/pid ] && mpd
+
+# feh --bg-fill ~/Pictures/YX9LV.jpg
+feh --bg-fill ~/Pictures/wallpaper.jpg
+
+redshift &
+xbacklight -set 60
+
+# xmodmap -e 'clear Lock' # ensure not getting stuck in caps on mode
+# xmodmap -e 'keycode 0x55=Escape' # remap capsLock = esc
+
+~/bin/launch_polybar
+# ~/bin/vanela &

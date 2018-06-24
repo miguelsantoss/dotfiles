@@ -1,0 +1,13 @@
+#!/bin/sh
+
+sink_n="$(pactl list sinks | grep Sink | awk '{print $2}' | sed 's/#//g')"
+echo $sink_n
+
+if [ "$1" = "inc" ]; then
+	pactl set-sink-volume $sink_n +5%
+else
+	pactl set-sink-volume $sink_n -5%
+fi
+
+level="`pactl list sinks | grep '^[[:space:]]Volume:' | \
+        head -n $(( $SINK + 1 )) | tail -n 1 | sed -e 's,.* \([0-9][0-9]*\)%.*,\1,'`"

@@ -1,0 +1,67 @@
+!-----------------------------------------------------------------------
+!           Xft settings
+!-----------------------------------------------------------------------
+
+Xft.autohint:              0
+Xft.lcdfilter:             lcddefault
+Xft.hintstyle:             hintslight
+Xft.hinting:               true
+Xft.antialias:             true
+Xft.rgba:                  rgb
+Xft.dpi:                   90
+
+!-----------------------------------------------------------------------
+!         URxvt settings
+!-----------------------------------------------------------------------
+!
+URxvt.internalBorder:      24
+URxvt.externalBorder:      0
+! URxvt*shading:             30
+URxvt*depth:               24
+URxvt.saveLines:           10000
+URxvt.geometry:            84x22
+URxvt*terminalName:        rxvt-unicode-256color
+URxvt*visualBell:          false
+URxvt*urgentOnBell:        true
+
+!! Scrollbar
+!URxvt.scrollStyle:        rxvt
+URxvt.scrollBar:           false
+URxvt*scrollTtyOutput:     false
+URxvt*scrollWithBuffer:    true
+URxvt*scrollTtyKeypress:   true
+URxvt*saveline:	           15000
+
+URxvt.iso14755:            false
+URxvt.iso14755_52:         false
+
+URxvt.cursorBlink:         false
+URxvt.cursorUnderline:     false
+!URxvt.cursorColor:        #c5c10c
+!URxvt.borderColor:        #07090d
+URxvt.colorUL:             #757978
+
+URxvt*font:                xft:cherry:size=10
+URxvt*boldFont:            xft:cherry:size=10
+URxvt*italicFont:          xft:cherry:size=10
+URxvt*boldItalicFont:      xft:cherry:size=10
+
+! URxvt*letterSpace:         -1
+! URxvt.lineSpace:           -1
+
+! ------------------------------------------------------------------------------
+! ROFI Color theme
+! ------------------------------------------------------------------------------
+
+rofi.bw: 2
+rofi.font: cherry 10
+rofi.width: 35
+rofi.separator: none
+rofi.sidebare-mode: false
+rofi.lines: 10
+rofi.padding: 15
+rofi.fixed-num-lines: true
+rofi.hide-scrollbar: true
+rofi.terminal: st
+
+#include ".color/dracula"

@@ -1,0 +1,243 @@
+; vim:ft=cfg
+;     _____
+;    (, /   )    /)      /)
+;     _/__ / ___//      (/_ _   __
+;     /     (_)(/_ (_/_/_) (_(_/ (_
+;  ) /            .-/
+; (_/            (_/
+
+[colors]
+bg = ${xrdb:background}
+fg = ${xrdb:foreground}
+
+
+blk = ${xrdb:color0}
+red = ${xrdb:color1}
+grn = ${xrdb:color2}
+ylw = ${xrdb:color3}
+blu = ${xrdb:color4}
+mag = ${xrdb:color5}
+cyn = ${xrdb:color6}
+wht = ${xrdb:color7}
+
+bblk = ${xrdb:color8}
+bred = ${xrdb:color9}
+bgrn = ${xrdb:color10}
+bylw = ${xrdb:color11}
+bblu = ${xrdb:color12}
+bmag = ${xrdb:color13}
+bcyn = ${xrdb:color14}
+bwht = ${xrdb:color15}
+
+[global/wm]
+margin-top        = 0
+margin-bottom     = 0
+override-redirect = true
+
+[bar/base]
+monitor = ${env:MONITOR:eDP1}
+width    = 100%
+height   = 24
+offset-x = 0
+offset-y = 0
+
+background = ${colors.bg}
+foreground = ${colors.fg}
+border-color = ${colors.bg}
+
+font-0 = cherry:size=14;2
+font-1 = Siji:size=9;2
+
+modules-left   = workspaces title
+modules-center =
+modules-right  = volume backlight battery date
+
+border-size         = 6
+padding-left        = 0
+padding-right       = 0
+module-margin-left  = 1
+module-margin-right = 0
+
+bottom = false
+
+[module/date]
+type                     = internal/date
+interval                 = 1
+date                     = " %I:%M"
+format-prefix            = 
+format-padding           = 2
+
+format-background        = ${colors.fg}
+format-foreground        = ${colors.bg}
+
+[module/title]
+type = internal/xwindow
+label-maxlen = 50
+format-padding = 2
+
+[module/backlight]
+type = internal/backlight
+card = intel_backlight
+enable-scroll = false
+
+format = <label>
+format-prefix = 
+format-padding    = 1
+
+label=%percentage%%
+label-padding = 1
+
+format-background = ${colors.ylw}
+format-foreground = ${colors.bg}
+
+[module/volume]
+type = internal/volume
+
+format-volume = <label-volume>
+format-muted = <label-muted>
+
+label-muted             = muted
+label-muted-padding     = 1
+
+format-volume-prefix = " "
+format-muted-prefix  = " "
+
+format-volume-padding = 2
+format-muted-padding    = 2
+
+format-volume-background = ${colors.mag}
+format-muted-background  = ${colors.mag}
+
+format-volume-foreground = ${colors.bg}
+format-muted-foreground  = ${colors.bg}
+
+[module/music]
+type = internal/mpd
+
+host = 127.0.0.1
+port = 6600
+
+interval = 2
+
+format-online = <label-song>
+format-online-padding = 2
+
+label-song         = " %title% - %artist%"
+label-song-maxlen = 45
+label-song-padding = 1
+
+[module/spotify]
+type = custom/script
+interval = 2
+
+format = <label>
+format-prefix-foreground = ${colors.red}
+label = %output:0:45:...%
+format-padding = 1
+
+exec = ~/.config/polybar/mpris.sh
+click-left = playerctl previous
+click-middle = playerctl play-pause
+click-right = playerctl next
+
+[module/workspace2bwm]
+type              = custom/script
+exec              = 2bws.sh
+interval          = 0.01
+format-padding    = 1
+scroll-up         = exec wscycle.sh -f
+scroll-down       = exec wscycle.sh -r
+
+[module/bspwm]
+type = internal/bspwm
+
+pin-workspaces = true
+inline-mode = false
+enable-click = true
+enable-scroll = false
+reverse-scroll = false
+fuzzy-match = false
+
+format-background = ${xrdb:color0}
+format-padding = 2
+
+label-focused = ✕
+label-focused-background = ${xrdb:color0}
+# label-focused-foreground = ${xrdb:foreground}
+label-focused-padding    = 1
+
+label-occupied = •
+label-occupied-background = ${xrdb:color0}
+# label-occupied-foreground = ${xrdb:foreground}
+label-occupied-padding    = 1
+
+label-urgent = •
+label-urgent-background = ${xrdb:color0}
+label-urgent-foreground = ${colors.red}
+label-urgent-padding    = 1
+
+label-empty = •
+label-empty-background = ${xrdb:color0}
+label-empty-foreground = ${xrdb:color11}
+label-empty-padding    = 1
+
+[module/battery]
+type          = internal/battery
+full-at       = 98
+battery       = BAT0
+adapter       = AC0
+poll-interval = 5
+
+format-charging-prefix      = ""
+format-discharging-prefix   = ""
+format-full-prefix          = ""
+
+label-charging      = " %percentage%% "
+label-discharging   = " %percentage%% "
+label-full          = " %percentage%% "
+
+format-charging-padding = 1
+format-discharging-padding = 1
+format-full-padding    = 1
+
+format-charging-background = ${colors.grn}
+format-discharging-background = ${colors.red}
+format-full-background    = ${colors.ylw}
+
+format-charging-foreground = ${colors.bg}
+format-discharging-foreground = ${colors.bg}
+format-full-foreground    = ${colors.bg}
+
+[module/workspaces]
+
+	type            = internal/bspwm
+	strip-wsnumbers = true
+	enable-scroll   = false
+	enable-click    = false
+
+	format          = <label-state> <label-mode>
+  label-monitor   = %name%
+
+	label-mode-background = ${xrdb:background}
+	label-mode-foreground = ${xrdb:foreground}
+	label-mode-padding    = 2
+
+	label-focused            = %name%
+	label-focused-background = ${xrdb:color5}
+	label-focused-foreground = ${xrdb:background}
+	label-focused-padding    = 2
+
+	label-occupied            = %name%
+	label-occupied-background = ${xrdb:background}
+	label-occupied-foreground = ${xrdb:foreground}
+	label-occupied-padding    = 2
+
+	label-empty            = %name%
+	label-empty-background = ${xrdb:background}
+	label-empty-foreground = ${xrdb:foreground}
+	label-empty-padding    = 2
+
+	label-urgent            = %name%
+	label-urgent-background = ${xrdb:background}
+	label-urgent-foreground = ${xrdb:foreground}
+	label-urgent-padding    = 2

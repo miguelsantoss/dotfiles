@@ -1,0 +1,14 @@
+#!/bin/sh
+
+out="/home/migui/Downloads/youtubemp3"
+cd $out
+
+url=$1
+if curl --output /dev/null --silent --head --fail "$url"; then
+  notify-send "Valid video detected, starting download"
+  youtube-dl --extract-audio --audio-format mp3 "$url"
+  notify-send "Video downloaded into $out"
+else
+  notify-send "Valid video not detected"
+fi
+

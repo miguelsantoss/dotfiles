@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ "$(sudo asus-kbd-backlight show)" -eq "0" ]; then
+  sudo asus-kbd-backlight night
+  exit;
+else
+  sudo asus-kbd-backlight 0
+fi

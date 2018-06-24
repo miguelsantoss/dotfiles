@@ -1,0 +1,57 @@
+#!/bin/bash
+
+killall sxhkd
+sxhkd &
+
+getcolors () {
+  FOREGROUND=$(xrdb -query | grep 'foreground:'| awk '{print $NF}')
+  BACKGROUND=$(xrdb -query | grep 'background:'| awk '{print $NF}')
+  BLACK=$(xrdb -query | grep 'color0:'| awk '{print $NF}')
+  RED=$(xrdb -query | grep 'color1:'| awk '{print $NF}')
+  GREEN=$(xrdb -query | grep 'color2:'| awk '{print $NF}')
+  YELLOW=$(xrdb -query | grep 'color3:'| awk '{print $NF}')
+  BLUE=$(xrdb -query | grep 'color4:'| awk '{print $NF}')
+  MAGENTA=$(xrdb -query | grep 'color5:'| awk '{print $NF}')
+  CYAN=$(xrdb -query | grep 'color6:'| awk '{print $NF}')
+  WHITE=$(xrdb -query | grep 'color7:'| awk '{print $NF}')
+}
+
+getcolors
+
+bspc monitor -d 1 2 3 4 5
+
+bspc config border_width          2
+bspc config window_gap            8
+
+bspc config split_ratio           0.52
+bspc config borderless_monocle    true
+bspc config gapless_monocle       true
+bspc config focus_follows_pointer true
+bspc config paddingless_monocle   false
+bspc config single_monocle        false
+
+bspc config top_padding 0
+bspc config right_padding 0
+bspc config bottom_padding 0
+bspc config left_padding 0
+
+bspc config focused_border_color "$BLUE"
+bspc config normal_border_color "$BACKGROUND"
+bspc config active_border_color "$MAGENTA"
+bspc config presel_feedback_color "$MAGENTA"
+
+bspc rule -r *:*
+bspc rule -a * state=tiling
+bspc rule -a Gimp state=tiling follow=on
+# Customization
+declare -a settings=(Lxappearance Lxtask Lxrandr Arandr \
+System-config-printer.py Pavucontrol Exo-helper-1)
+for i in ${settings[@]}; do
+   bspc rule -a $i state=floating follow=on focus=on
+done
+# Office
+declare -a office=(libreoffice-writer libreoffice-calc \
+libreoffice-impress libreoffice-startcenter libreoffice *:libreofficedev)
+for i in ${office[@]}; do
+   bspc rule -a $i state=tiling follow=on focus=on
+done
