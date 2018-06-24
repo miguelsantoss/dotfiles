@@ -41,14 +41,9 @@ echo "Applying gcc patch"
 patch -Np1 -i ../gcc.patch
 echo "Getting config"
 cp -r ../config .config
- 
+
 # echo "Making bzImage"
 # make bzImage
 # cp arch/x86/boot/bzImage bzImage
 # echo "Done!"
 # sudo cp -r bzImage /boot/efi/EFI/Linux/BOOTX64.efi
-# ccrypt bzImage
-# 
-# scp -P 22007 bzImage.cpt mythreed@mythreed.com:public_html/BOOTX64.efi.cpt
-# 
-# rm -Rf bzImage.cpt bzImage
