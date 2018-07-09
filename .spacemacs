@@ -351,6 +351,9 @@ you should place your code here."
 
   (global-evil-mc-mode 1)
 
+  ;; don't create junk files please
+  (setq tern-command (append tern-command '("--no-port-file")))
+
   (global-set-key (kbd "M-x") 'counsel-M-x)
   (add-hook 'prog-mode-hook #'(lambda () (modify-syntax-entry ?_ "w")))
   (setq ivy-initial-inputs-alist nil)
@@ -403,6 +406,7 @@ you should place your code here."
     (setq javascript-indent-level n) ; javascript-mode
     (setq js-indent-level n) ; js-mode
     (setq js2-basic-offset n) ; js2-mode, in latest js2-mode, it's alias of js-indent-level
+    (setq js-switch-indent-offset n)
     (setq web-mode-markup-indent-offset n) ; web-mode, html tag in html file
     (setq web-mode-css-indent-offset n) ; web-mode, css in html file
     (setq web-mode-code-indent-offset n) ; web-mode, js code in html file
