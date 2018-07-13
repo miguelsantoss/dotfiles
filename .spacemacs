@@ -143,8 +143,8 @@ values."
    ;; List of themes, the first of the list is loaded when spacemacs starts.
    ;; Press <SPC> T n to cycle to the next theme in the list (works great
    ;; with 2 themes variants, one dark and one light)
-   dotspacemacs-themes '(atom-one-dark
-                         github
+   dotspacemacs-themes '(github
+                         atom-one-dark
                          dracula
                          spacemacs-dark
                          spacemacs-light)
@@ -352,11 +352,11 @@ you should place your code here."
   (global-evil-mc-mode 1)
 
   ;; don't create junk files please
-  (setq tern-command (append tern-command '("--no-port-file")))
+  (setq tern-command '("/usr/local/bin/tern" "--no-port-file"))
 
+  (setq ivy-initial-inputs-alist nil)
   (global-set-key (kbd "M-x") 'counsel-M-x)
   (add-hook 'prog-mode-hook #'(lambda () (modify-syntax-entry ?_ "w")))
-  (setq ivy-initial-inputs-alist nil)
 
   (defun nothing())
   (define-key evil-normal-state-map (kbd "<down-mouse-1>") 'nothing)
@@ -466,12 +466,19 @@ Any path found is added to the `exec-path'."
 
   (beacon-mode 1)
   (setq beacon-color "orange")
-  (setq beacon-size 50)
+  (setq beacon-size 7)
   (setq beacon-blink-delay 0.3)
   (setq beacon-blink-duration 0.4)
 
   (setq indent-tabs-mode nil)
-  (my-setup-indent 2))
+  (my-setup-indent 2)
+  (defadvice js-jsx-indent-line (after js-jsx-indent-line-after-hack activate)
+    "Workaround sgml-mode and follow airbnb component style."
+    (save-excursion
+      (beginning-of-line)
+      (if (looking-at-p "^ +\/?> *$")
+          (delete-char sgml-basic-offset))))
+  (global-aggressive-indent-mode 1))
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.
