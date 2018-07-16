@@ -55,4 +55,6 @@
 
 (require 'setup-core)
 (require 'setup-evil)
+(require 'setup-completion)
+(require 'setup-langs)
 (require 'appearance)
