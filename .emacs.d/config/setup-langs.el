@@ -1,20 +1,30 @@
+(defun my-setup-indent (n)
+  (setq c-basic-offset n) ; java/c/c++
+  (setq coffee-tab-width n) ; coffeescript
+  (setq javascript-indent-level n) ; javascript-mode
+  (setq js-indent-level n) ; js-mode
+  (setq js2-basic-offset n) ; js2-mode, in latest js2-mode, it's alias of js-indent-level
+  (setq js-switch-indent-offset n)
+  (setq web-mode-markup-indent-offset n) ; web-mode, html tag in html file
+  (setq web-mode-css-indent-offset n) ; web-mode, css in html file
+  (setq web-mode-code-indent-offset n) ; web-mode, js code in html file
+  (setq css-indent-offset n))
+
 ;; Javascript/JSX
 (setq js-switch-indent-offset 2)
 
 (use-package eslint-fix)
 
 (use-package js2-mode
-  :init
-  (setq js2-include-node-externs t)
-  (setq js2-include-browser-externs t)
-  (setq js2-mode-show-parse-errors nil)
-  (setq js2-mode-show-strict-warnings nil)
+  :custom
+  (js2-include-node-externs t)
+  (js2-include-browser-externs t)
+  (js2-mode-show-parse-errors nil)
+  (js2-mode-show-strict-warnings nil)
   :config
   (js2-imenu-extras-mode))
 
-(use-package rjsx-mode
-  :mode(("\\.js\\'" . rjsx-mode)
-  ("\\.jsx\\'" . rjsx-mode)))
+(use-package rjsx-mode :mode ("\\.jsx?\\'" . rjsx-mode))
 
 (defadvice js-jsx-indent-line (after js-jsx-indent-line-after-hack activate)
   "Workaround 'sgml-mode' and follow airbnb component style."
@@ -59,17 +69,10 @@
 
 ;; Web mode
 (use-package web-mode
-  :mode (("\\.phtml\\'" . web-mode)
-   ("\\.tpl\\.php\\'" . web-mode)
-   ("\\.blade\\.php\\'" . web-mode)
-   ("\\.jsp\\'" . web-mode)
-   ("\\.as[cp]x\\'" . web-mode)
-   ("\\.erb\\'" . web-mode)
+  :mode ( ("\\.erb\\'" . web-mode)
    ("\\.html?\\'" . web-mode)
    ("\\.ejs\\'" . web-mode)
-   ("\\.php\\'" . web-mode)
-   ("\\.mustache\\'" . web-mode)
-   ("/\\(views\\|html\\|theme\\|templates\\)/.*\\.php\\'" . web-mode))
+   ("\\.mustache\\'" . web-mode))
   :init
   (setq web-mode-markup-indent-offset 2)
   (setq web-mode-attr-indent-offset 2)
@@ -94,5 +97,8 @@
 (use-package rainbow-mode
   :pin gnu
   :hook css-mode)
+
+(setq indent-tabs-mode nil)
+(my-setup-indent 2)
 
 (provide 'setup-langs)

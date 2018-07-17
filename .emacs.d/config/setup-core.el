@@ -29,15 +29,35 @@
 (setq prettify-symbols-unprettify-at-point 'right-edge)
 (setq uniquify-buffer-name-style 'forward)
 
-;; Don't create backups
-(setq make-backup-files nil)
+;; create backups on a different folder
+(setq backup-directory-alist
+      `(("." . ,(concat user-emacs-directory "backups"))))
+(setq delete-old-versions t
+  kept-new-versions 6
+  kept-old-versions 2
+  version-control t)
 
 ;; Undo windows
 (winner-mode 1)
 (global-prettify-symbols-mode +1) ;; Make symbols pretty e.g. lamba
+(global-linum-mode t)
 
 (defalias 'yes-or-no-p 'y-or-n-p)
 
-(use-package restart-emacs :ensure t)
+
+(use-package restart-emacs)
+
+(if (eq system-type 'darwin)
+    (setq ns-right-alternate-modifier nil))
+
+(use-package exec-path-from-shell
+  :if (memq window-system '(mac ns))
+  :defer 1
+  :commands (exec-path-from-shell-initialize
+             exec-path-from-shell-copy-env)
+  :init
+  (setq exec-path-from-shell-check-startup-files nil)
+  :config
+  (exec-path-from-shell-initialize))
 
 (provide 'setup-core)

@@ -1,5 +1,11 @@
 (use-package evil
-  :ensure t
+  :custom
+  (evil-motion-state-cursor 'box)
+  (evil-visual-state-cursor 'box)
+  (evil-normal-state-cursor 'box)
+  (evil-insert-state-cursor 'box)
+  (evil-emacs-state-cursor  'box)
+
   :config
   (evil-mode 1)
 
@@ -31,14 +37,12 @@
   (ad-activate 'evil-search-previous)
 
   (use-package evil-escape
-    :ensure t
     :config
     (evil-escape-mode 1)
     (setq-default evil-escape-key-sequence "fd")
     (setq-default evil-escape-delay 0.2))
 
   (use-package evil-leader
-    :ensure t
     :config
     (global-evil-leader-mode)
     (evil-leader/set-leader "<SPC>")
@@ -69,11 +73,9 @@
     )
 
   (use-package evil-surround
-    :ensure t
     :config
     (global-evil-surround-mode))
 
-  (use-package evil-indent-textobject
-    :ensure t))
+  (use-package evil-indent-textobject))
 
 (provide 'setup-evil)

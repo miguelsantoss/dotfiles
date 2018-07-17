@@ -24,9 +24,11 @@
   (package-refresh-contents)
   (package-install 'use-package))
 
+(setq use-package-always-ensure t)
+
 (eval-when-compile
   (require 'use-package))
-(use-package diminish :ensure t)
+(use-package diminish)
 
 (add-to-list 'load-path (expand-file-name "config" user-emacs-directory))
 (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
@@ -34,11 +36,9 @@
 
 ;; Highlight each source code identifier based on name
 (use-package color-identifiers-mode
-  :ensure t
   :defer t)
 
 (use-package avy
-  :ensure t
   :diminish avy-mode
   :bind (("C-x C-SPC" . avy-goto-char)
          ("C-x C-x" . avy-goto-word-or-subword-1)
@@ -47,7 +47,6 @@
   (setq avy-timeout-seconds 0.6))
 
 (use-package dumb-jump
-  :ensure t
   :bind ("C-M-g". dumb-jump-go)
   :config
   (dumb-jump-mode))
@@ -55,6 +54,8 @@
 
 (require 'setup-core)
 (require 'setup-evil)
+(require 'setup-projectile)
+(require 'setup-company)
 (require 'setup-completion)
 (require 'setup-langs)
 (require 'appearance)
