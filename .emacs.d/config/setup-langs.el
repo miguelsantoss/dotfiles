@@ -1,3 +1,13 @@
+;;; package -- summary
+;;; Commentary:
+
+;;; Code:
+(use-package flycheck
+  :defer 1
+  :diminish (flycheck-mode . "Fly")
+  :hook
+  (after-init . global-flycheck-mode))
+
 (defun my-setup-indent (n)
   (setq c-basic-offset n) ; java/c/c++
   (setq coffee-tab-width n) ; coffeescript
@@ -10,8 +20,9 @@
   (setq web-mode-code-indent-offset n) ; web-mode, js code in html file
   (setq css-indent-offset n))
 
+;; Ruby / Rails
+
 ;; Javascript/JSX
-(setq js-switch-indent-offset 2)
 
 (use-package eslint-fix)
 
@@ -21,6 +32,9 @@
   (js2-include-browser-externs t)
   (js2-mode-show-parse-errors nil)
   (js2-mode-show-strict-warnings nil)
+  (js2-mode-show-parse-errors t)
+  (js2-mode-show-strict-warnings t)
+  (js-switch-indent-offset 2)
   :config
   (js2-imenu-extras-mode))
 
@@ -38,6 +52,7 @@
           32))))))))
 
 (use-package js2-refactor
+  :diminish js2-refactor-mode
   :hook (js2-mode . js2-refactor-mode)
   :config
   (js2r-add-keybindings-with-prefix "C-c C-m"))
@@ -55,9 +70,9 @@
   (tide-hl-identifier-mode +1)
   (company-mode +1))
 
-(use-package tide
-  :hook
-  (js2-mode . setup-tide-mode))
+;; (use-package tide
+  ;; :hook
+  ;; (js2-mode . setup-tide-mode))
 
 (use-package indium
   :diminish (indium-interaction-mode . "In" )
@@ -102,3 +117,4 @@
 (my-setup-indent 2)
 
 (provide 'setup-langs)
+;;; setup-langs.el ends here

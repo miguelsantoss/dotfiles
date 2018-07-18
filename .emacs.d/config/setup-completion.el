@@ -1,3 +1,7 @@
+;;; package -- summary
+;;; Commentary:
+
+;;; Code:
 (use-package ido
   :custom
   (ido-enable-prefix nil)
@@ -9,9 +13,9 @@
   (ido-max-prospects 10)
   (ido-use-faces nil)
   (ido-vertical-define-keys 'C-n-C-p-up-down-left-right)
+  (ido-everywhere t)
   :config
-  (ido-mode t)
-  (ido-everywhere t))
+  (ido-mode t))
 
 (use-package flx-ido
   :after ido
@@ -20,13 +24,13 @@
 
 (use-package ido-vertical-mode
   :after ido
-  :config 
+  :config
   (ido-vertical-mode t))
 
 (use-package ido-completing-read+
   :after ido
   :config
-  (ido-ubiquitous-mode 1))
+  (ido-ubiquitous-mode t))
 
 (use-package smex
   :config
@@ -47,7 +51,6 @@
   (company-tooltip-align-annotations 't)
   (global-company-mode t))
 
-
 (use-package company-quickhelp
   :after company
   :diminish
@@ -59,3 +62,4 @@
   :hook (company-mode . company-box-mode))
 
 (provide 'setup-completion)
+;;; setup-completion.el ends here

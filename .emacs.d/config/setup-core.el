@@ -1,3 +1,7 @@
+;;; package -- summary
+;;; Commentary:
+
+;;; Code:
 (menu-bar-mode -1)		   ;; Remove menu bar
 (tool-bar-mode -1)		   ;; Remove toolbar
 (scroll-bar-mode -1)		   ;; Remove scrollbar
@@ -60,4 +64,28 @@
   :config
   (exec-path-from-shell-initialize))
 
+(use-package server
+  :init
+  (server-mode t)
+  :config
+  (unless (server-running-p)
+    (server-start)))
+
+(use-package undo-tree
+  :diminish undo-tree-mode
+  :demand
+  :config
+  (global-undo-tree-mode)
+  :bind
+  (("C-z" . undo-tree-undo)
+        ("C-M-z" . undo-tree-redo)))
+
+(use-package visual-regexp)
+(use-package multiple-cursors)
+(use-package expand-region
+  :bind
+  (("C-=" . er/expand-region)
+        ("C--" . er/contract-region)))
+
 (provide 'setup-core)
+;;; setup-core.el ends here

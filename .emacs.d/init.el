@@ -55,7 +55,6 @@
 (require 'setup-core)
 (require 'setup-evil)
 (require 'setup-projectile)
-(require 'setup-company)
 (require 'setup-completion)
 (require 'setup-langs)
 (require 'appearance)

@@ -1,3 +1,7 @@
+;;; package -- summary
+;;; Commentary:
+
+;;; Code:
 (use-package projectile
   :custom
   (projectile-switch-project-action 'projectile-vc)
@@ -7,6 +11,7 @@
              (projectile-project-name))))
   (projectile-enable-caching t)
   :config
-  (projectile-global-mode t))
+  (projectile-mode t))
 
 (provide 'setup-projectile)
+;;; setup-projectile.el ends here
