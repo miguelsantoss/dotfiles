@@ -110,7 +110,6 @@
   :hook (web-mode sgml-mode html-mode css-mode))
 
 (use-package rainbow-mode
-  :pin gnu
   :hook css-mode)
 
 (setq indent-tabs-mode nil)

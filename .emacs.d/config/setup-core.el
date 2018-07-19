@@ -80,12 +80,61 @@
   (("C-z" . undo-tree-undo)
         ("C-M-z" . undo-tree-redo)))
 
+(use-package smex)
 (use-package visual-regexp)
 (use-package multiple-cursors)
 (use-package expand-region
   :bind
   (("C-=" . er/expand-region)
         ("C--" . er/contract-region)))
+
+(use-package ace-window
+  :ensure t
+  :bind([remap other-window] . ace-window)
+  :custom
+  (aw-dispatch-always t)
+  :config
+  (custom-set-faces
+   '(aw-leading-char-face
+     ((t (:inherit ace-jump-face-foreground :height 3.0))))))
+
+(use-package smartparens
+  :diminish smartparens-mode
+  :config (smartparens-mode t))
+
+(use-package paren
+  :custom
+  (show-paren-style 'parenthesis)
+  (show-paren-when-point-inside-paren t)
+  (show-paren-when-point-in-periphery t)
+  :config
+  (show-paren-mode t))
+
+(use-package rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+(use-package which-key
+  :config (which-key-mode t))
+
+(use-package recentf
+  :custom
+  (recentf-max-saved-items 100)
+  (recentf-max-menu-items 15)
+  (recentf-auto-cleanup 'never)
+  :bind ("C-x C-r" . recentf-open-files)
+  :config
+  (recentf-mode t))
+
+(use-package beacon
+  :diminish beacon-mode
+  :custom
+  (beacon-blink-delay .5)
+  (beacon-size 4)
+  (beacon-blink-when-focused t)
+  (beacon-blink-duration .5)
+  (beacon-blink-when-window-scrolls t)
+  :config
+  (beacon-mode t))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
