@@ -45,6 +45,9 @@
     :config
     (global-evil-surround-mode))
 
+  (use-package evil-smartparens
+    :hook (smartparens-mode . evil-smartparens-mode))
+
   (use-package evil-indent-textobject))
 
 (provide 'setup-evil)

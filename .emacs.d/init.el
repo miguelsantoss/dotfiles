@@ -8,7 +8,6 @@
 
 (package-initialize)
 
-(set-frame-font "Monaco 12" nil t)	   ;; Set font
 ;; Don't load old elc files when el is newer
 (setq load-prefer-newer t)
 
@@ -29,6 +28,10 @@
 (eval-when-compile
   (require 'use-package))
 (use-package diminish)
+
+(defmacro add-λ (hook &rest body)
+  (declare (indent 1) (debug t))
+  `(add-hook ,hook (lambda () ,@body)))
 
 (add-to-list 'load-path (expand-file-name "config" user-emacs-directory))
 (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
@@ -51,10 +54,13 @@
   :config
   (dumb-jump-mode))
 
-
 (require 'setup-core)
 (require 'setup-evil)
 (require 'setup-projectile)
 (require 'setup-completion)
 (require 'setup-langs)
+(require 'setup-magit)
 (require 'appearance)
+
+(provide 'init)
+;;; init.el ends here

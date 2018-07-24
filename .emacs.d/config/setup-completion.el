@@ -3,6 +3,7 @@
 
 ;;; Code:
 (use-package ivy
+  :diminish
   :custom
   (ivy-initial-inputs-alist nil)
   (ivy-extra-directories nil)

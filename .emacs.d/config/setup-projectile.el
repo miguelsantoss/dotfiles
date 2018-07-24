@@ -12,6 +12,8 @@
      (format " Pr[%s]"
              (projectile-project-name))))
   (projectile-enable-caching t)
+  :bind (("C-c p p" . projectile-switch-project)
+        ("C-c p f" . projectile-find-file))
   :config
   (projectile-mode))
 

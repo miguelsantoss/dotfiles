@@ -33,18 +33,22 @@
 (setq prettify-symbols-unprettify-at-point 'right-edge)
 (setq uniquify-buffer-name-style 'forward)
 
+;; do not create backups
+(setq make-backup-files nil)
+
 ;; create backups on a different folder
-(setq backup-directory-alist
-      `(("." . ,(concat user-emacs-directory "backups"))))
-(setq delete-old-versions t
-  kept-new-versions 6
-  kept-old-versions 2
-  version-control t)
+;;(setq backup-directory-alist
+      ;;`(("." . ,(concat user-emacs-directory "backups"))))
+;;(setq delete-old-versions t
+  ;;kept-new-versions 6
+  ;;kept-old-versions 2
+  ;;version-control t)
 
 ;; Undo windows
 (winner-mode 1)
 (global-prettify-symbols-mode +1) ;; Make symbols pretty e.g. lamba
 (global-linum-mode t)
+;(electric-pair-mode t)
 
 (defalias 'yes-or-no-p 'y-or-n-p)
 
@@ -82,11 +86,21 @@
 
 (use-package smex)
 (use-package visual-regexp)
-(use-package multiple-cursors)
+
+(use-package evil-mc
+  :init
+  (global-evil-mc-mode))
+
 (use-package expand-region
   :bind
   (("C-=" . er/expand-region)
         ("C--" . er/contract-region)))
+
+(use-package drag-stuff
+  :diminish
+  :bind (("M-N" . drag-stuff-down)
+         ("M-P" . drag-stuff-up))
+  :init (drag-stuff-global-mode))
 
 (use-package ace-window
   :ensure t
@@ -99,8 +113,14 @@
      ((t (:inherit ace-jump-face-foreground :height 3.0))))))
 
 (use-package smartparens
-  :diminish smartparens-mode
-  :config (smartparens-mode t))
+  :diminish
+  :init
+  (progn
+    (require 'smartparens-config)
+    (require 'smartparens-ruby)
+    (require 'smartparens-html)
+    (smartparens-global-mode t)
+    (show-smartparens-global-mode t)))
 
 (use-package paren
   :custom
@@ -128,10 +148,10 @@
 (use-package beacon
   :diminish beacon-mode
   :custom
-  (beacon-blink-delay .5)
-  (beacon-size 4)
+  (beacon-blink-delay .4)
+  (beacon-size 7)
   (beacon-blink-when-focused t)
-  (beacon-blink-duration .5)
+  (beacon-blink-duration .3)
   (beacon-blink-when-window-scrolls t)
   :config
   (beacon-mode t))

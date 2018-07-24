@@ -5,8 +5,7 @@
 (use-package flycheck
   :defer 1
   :diminish (flycheck-mode . "Fly")
-  :hook
-  (after-init . global-flycheck-mode))
+  :hook (after-init . global-flycheck-mode))
 
 (defun my-setup-indent (n)
   (setq c-basic-offset n) ; java/c/c++
@@ -20,7 +19,53 @@
   (setq web-mode-code-indent-offset n) ; web-mode, js code in html file
   (setq css-indent-offset n))
 
+;; Coffeescript
+(use-package coffee-mode
+  :mode "\\.coffee\\.*"
+  :config
+  (defun coffee-indent ()
+    (if (coffee-line-wants-indent)
+        (coffee-insert-spaces (+ (coffee-previous-indent) coffee-tab-width))
+      (coffee-insert-spaces (coffee-previous-indent))))
+  (add-λ 'coffee-mode-hook
+    (setq-local indent-line-function #'coffee-indent)))
+
+;; Cucumber
+(use-package feature-mode
+  :mode "\\.feature")
+
 ;; Ruby / Rails
+(use-package enh-ruby-mode
+  :mode "\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'"
+  :interpreter "ruby"
+  :init
+  (add-λ 'enh-ruby-mode-hook
+    (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
+
+(use-package inf-ruby
+  :after enh-ruby-mode
+  :hook (enh-ruby-mode . inf-ruby-minor-mode)
+  :init
+  (add-hook 'compilation-filter-hook 'inf-ruby-auto-enter))
+
+(use-package ruby-tools
+  :diminish
+  :after enh-ruby-mode
+  :hook (enh-ruby-mode . ruby-tools-mode))
+
+(use-package projectile-rails
+  :init (projectile-rails-global-mode))
+
+(use-package ruby-hash-syntax
+  :bind (:map enh-ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
+
+(use-package robe
+  :after company
+  :hook enh-ruby-mode
+  :init (add-to-list 'company-backends #'company-robe))
+
+(use-package rbenv
+  :init (global-rbenv-mode))
 
 ;; Javascript/JSX
 

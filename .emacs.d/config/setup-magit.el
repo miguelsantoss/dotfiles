@@ -23,14 +23,29 @@
     (kill-buffer)
     (jump-to-register :magit-fullscreen)))
 
+(use-package magithub
+  :after magit
+  :config (magithub-feature-autoinject t))
+
+(use-package diff-hl
+  :hook
+  (dired-mode . diff-hl-dired-mode)
+  :config
+  (vc-git-diff-switches '("--histogram"))
+  (global-diff-hl-mode)
+  (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh t))
+
+(use-package git-messenger
+  :custom
+  (git-messenger:show-detail t))
+
 (use-package git-gutter+
-  :diminish git-gutter+-mode
-  :bind (("C-M-z C-M-s" . git-gutter+-stage-hunks)
-         ("C-M-z C-M-c" . git-gutter+-stage-and-commit))
+  :diminish
   :hook (prog-mode . git-gutter+-mode))
 
 (use-package git-gutter-fringe+
   :after git-gutter+
+  :diminish
   :config
   (git-gutter-fr+-minimal))
 
