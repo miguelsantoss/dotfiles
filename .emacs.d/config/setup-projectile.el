@@ -6,14 +6,13 @@
   :custom
   (projectile-completion-system 'ivy)
   (projectile-require-project-root nil)
-  (projectile-switch-project-action 'projectile-vc)
+  ;; (projectile-switch-project-action 'projectile-vc)
   (projectile-mode-line
    '(:eval
      (format " Pr[%s]"
              (projectile-project-name))))
   (projectile-enable-caching t)
-  :bind (("C-c p p" . projectile-switch-project)
-        ("C-c p f" . projectile-find-file))
+  (projectile-keymap-prefix (kbd "C-c p"))
   :config
   (projectile-mode))
 

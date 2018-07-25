@@ -8,8 +8,26 @@
   (magit-completing-read-function 'ivy-completing-read)
   :config
   (define-key magit-status-mode-map (kbd "q") 'magit-quit-session)
-  
-  ;;This setting is needed to use ivy completion:
+
+
+  (defun icn-commit-message-template (&rest discard)
+    "Insert Card ID from branch"
+    (interactive)
+    (insert (magit-get-current-branch))
+    (beginning-of-line)
+    (kill-word 1)
+    (delete-char 1)
+    (forward-word)
+    (kill-line)
+    (beginning-of-line)
+    (insert "[")
+    (upcase-word 1)
+    (insert "] ")
+    (end-of-line)
+    (evil-append))
+
+  ;; (add-hook 'git-commit-mode-hook 'icn-commit-message-template)
+  ;; (add-hook 'with-editor-mode-hook 'evil-normal-state)
   
   ;; full screen magit-status
   (defadvice magit-status (around magit-fullscreen activate)
@@ -23,15 +41,15 @@
     (kill-buffer)
     (jump-to-register :magit-fullscreen)))
 
-(use-package magithub
-  :after magit
-  :config (magithub-feature-autoinject t))
+;; (use-package magithub
+  ;; :after magit
+  ;; :config (magithub-feature-autoinject t))
 
 (use-package diff-hl
   :hook
   (dired-mode . diff-hl-dired-mode)
   :config
-  (vc-git-diff-switches '("--histogram"))
+  ;; (vc-git-diff-switches '("--histogram"))
   (global-diff-hl-mode)
   (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh t))
 
