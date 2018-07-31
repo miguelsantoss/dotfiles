@@ -6,7 +6,7 @@
   :custom
   (projectile-completion-system 'ivy)
   (projectile-require-project-root nil)
-  ;; (projectile-switch-project-action 'projectile-vc)
+  (projectile-switch-project-action 'projectile-recentf)
   (projectile-mode-line
    '(:eval
      (format " Pr[%s]"

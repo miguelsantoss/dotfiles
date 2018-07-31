@@ -68,13 +68,6 @@
   :config
   (exec-path-from-shell-initialize))
 
-(use-package server
-  :init
-  (server-mode t)
-  :config
-  (unless (server-running-p)
-    (server-start)))
-
 (use-package undo-tree
   :diminish undo-tree-mode
   :demand
@@ -141,7 +134,6 @@
   (recentf-max-saved-items 100)
   (recentf-max-menu-items 15)
   (recentf-auto-cleanup 'never)
-  :bind ("C-x C-r" . recentf-open-files)
   :config
   (recentf-mode t))
 

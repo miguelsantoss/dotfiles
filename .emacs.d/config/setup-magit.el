@@ -3,7 +3,8 @@
 
 ;;; Code:
 (use-package magit
-  :bind ("C-c g" . magit-status)
+  :bind (("C-c g" . magit-status)
+         ("C-c b" . magit-blame))
   :custom
   (magit-completing-read-function 'ivy-completing-read)
   :config
@@ -28,7 +29,7 @@
 
   ;; (add-hook 'git-commit-mode-hook 'icn-commit-message-template)
   ;; (add-hook 'with-editor-mode-hook 'evil-normal-state)
-  
+
   ;; full screen magit-status
   (defadvice magit-status (around magit-fullscreen activate)
     (window-configuration-to-register :magit-fullscreen)

@@ -2,12 +2,66 @@
 ;;; Commentary:
 
 ;;; Code:
+(defun doom-buffers-in-mode (modes &optional buffer-list derived-p)
+  "Return a list of buffers whose `major-mode' is `eq' to MODE(S).
+
+If DERIVED-P, test with `derived-mode-p', otherwise use `eq'."
+  (let ((modes (doom-enlist modes)))
+    (cl-remove-if-not (if derived-p
+                          (lambda (buf)
+                            (with-current-buffer buf
+                              (apply #'derived-mode-p modes)))
+                        (lambda (buf)
+                          (memq (buffer-local-value 'major-mode buf) modes)))
+                      (or buffer-list (doom-buffer-list)))))
+
+
+(defun doom-enlist (exp)
+  "Return EXP wrapped in a list, or as-is if already a list."
+  (declare (pure t) (side-effect-free t))
+  (if (listp exp) exp (list exp)))
+
+(defun set-company-backend! (modes &rest backends)
+  "Prepends BACKENDS (in order) to `company-backends' in MODES.
+
+MODES should be one symbol or a list of them, representing major or minor modes.
+This will overwrite backends for MODES on consecutive uses.
+
+If the car of BACKENDS is nil, unset the backends for MODES.
+
+Examples:
+
+  (set-company-backend! 'js2-mode 'company-tide 'company-yasnippet)
+  (set-company-backend! 'sh-mode
+    '(company-shell :with company-yasnippet))
+  (set-company-backend! 'js2-mode
+    '(:separate company-irony-c-headers company-irony))
+  (set-company-backend! 'sh-mode nil)"
+  (declare (indent defun))
+  (dolist (mode (doom-enlist modes))
+    (let ((hook (intern (format "%s-hook" mode)))
+          (fn   (intern (format "+company|init-%s" mode))))
+      (cond ((null (car-safe backends))
+             (remove-hook hook fn)
+             (unintern fn nil))
+            ((fset fn
+                   (lambda ()
+                     (when (or (eq major-mode mode)
+                               (and (boundp mode) (symbol-value mode)))
+                       (require 'company)
+                       (make-local-variable 'company-backends)
+                       (dolist (backend (reverse backends))
+                         (cl-pushnew backend company-backends
+                                     :test (if (symbolp backend) #'eq #'equal))))))
+             (add-hook hook fn))))))
+
 (use-package flycheck
   :defer 1
   :diminish (flycheck-mode . "Fly")
   :hook (after-init . global-flycheck-mode))
 
-(defun my-setup-indent (n)
+(defun ms|setup-indentation (n)
+  (setq indent-tabs-mode nil)
   (setq c-basic-offset n) ; java/c/c++
   (setq coffee-tab-width n) ; coffeescript
   (setq javascript-indent-level n) ; javascript-mode
@@ -35,16 +89,36 @@
   :mode "\\.feature")
 
 ;; Ruby / Rails
+
+(defvar +ruby-rbenv-versions nil
+  "Available versions of ruby in rbenv.")
+
+(defvar-local +ruby-current-version nil
+  "The currently active ruby version.")
+
 (use-package enh-ruby-mode
-  :mode "\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'"
+  :mode "\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|gemspec\\)\\'"
   :interpreter "ruby"
   :init
-  (add-λ 'enh-ruby-mode-hook
-    (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
+
+  (if (not (executable-find "rbenv"))
+      (setq-default +ruby-current-version (string-trim (shell-command-to-string "ruby --version 2>&1 | cut -d' ' -f2")))
+    (setq +ruby-rbenv-versions (split-string (shell-command-to-string "rbenv versions --bare") "\n" t))
+
+    (defun ms|ruby|detect-rbenv-version ()
+      "Detect the rbenv version for the current project and set the relevant
+environment variables."
+      (when-let* ((version-str (shell-command-to-string "RBENV_VERSION= ruby --version 2>&1 | cut -d' ' -f2")))
+        (setq version-str (string-trim version-str)
+              +ruby-current-version version-str)
+        (when (member version-str +ruby-rbenv-versions)
+          (setenv "RBENV_VERSION" version-str))))
+    (add-hook 'enh-ruby-mode-hook #'ms|ruby|detect-rbenv-version))
+  (add-hook 'enh-ruby-mode-hook (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
 
 (use-package inf-ruby
   :after enh-ruby-mode
-  :hook (enh-ruby-mode . inf-ruby-minor-mode)
+  :hook (enh-ruby-mode . inf-ruby-console-auto)
   :init
   (add-hook 'compilation-filter-hook 'inf-ruby-auto-enter))
 
@@ -59,13 +133,45 @@
 (use-package ruby-hash-syntax
   :bind (:map enh-ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
 
+(defun ms|ruby|cleanup-robe-servers ()
+  "Clean up dangling inf robe processes if there are no more `enh-ruby-mode' buffers open."
+  ;; FIXME This should wait X seconds before cleaning up
+  (unless (or (not robe-mode) (doom-buffers-in-mode 'enh-ruby-mode))
+    (let (inf-buffer kill-buffer-query-functions)
+      (while (setq inf-buffer (robe-inf-buffer))
+        (let ((process (get-buffer-process inf-buffer))
+              confirm-kill-processes)
+          (when (processp process)
+            (kill-process (get-buffer-process inf-buffer))
+            (kill-buffer inf-buffer)))))))
+
 (use-package robe
-  :after company
   :hook enh-ruby-mode
-  :init (add-to-list 'company-backends #'company-robe))
+  :init
+  (defun ms|ruby|init-robe ()
+    (when (executable-find "ruby")
+      (cl-letf (((symbol-function #'yes-or-no-p) (lambda (_) t)))
+        (save-window-excursion
+          (ignore-errors (robe-start)))
+        (when (robe-running-p)
+          (add-hook 'kill-buffer-hook #'+ruby|cleanup-robe-servers nil t)))))
+  (add-hook 'enh-ruby-mode-hook #'ms/init-robe)
+  (set-company-backend! 'robe-mode 'company-robe))
+
+(use-package company-inf-ruby
+  :after inf-ruby
+  :config
+  :config (set-company-backend! 'inf-ruby-mode 'company-inf-ruby))
 
 (use-package rbenv
-  :init (global-rbenv-mode))
+  :after enh-ruby-mode
+  :init (global-rbenv-mode t))
+
+(use-package rspec-mode
+  :mode ("/\\.rspec\\'" . text-mode))
+
+(use-package rubocop
+  :hook enh-ruby-mode)
 
 ;; Javascript/JSX
 
@@ -129,27 +235,33 @@
 
 ;; Web mode
 (use-package web-mode
-  :mode ( ("\\.erb\\'" . web-mode)
-   ("\\.html?\\'" . web-mode)
-   ("\\.ejs\\'" . web-mode)
-   ("\\.mustache\\'" . web-mode))
-  :init
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-attr-indent-offset 2)
-  (setq web-mode-attr-value-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-css-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-enable-auto-closing t)
-  (setq web-mode-enable-auto-pairing t)
-  (setq web-mode-enable-comment-keywords t)
-  (setq web-mode-enable-current-element-highlight t))
+  :mode "\\.p?html?$"
+  :mode "\\.\\(?:tpl\\|blade\\)\\(\\.php\\)?$"
+  :mode "\\.erb$"
+  :mode "\\.jsp$"
+  :mode "\\.as[cp]x$"
+  :mode "\\.hbs$"
+  :mode "\\.mustache$"
+  :mode "\\.tsx$"
+  :mode "\\.vue$"
+  :mode "\\.twig$"
+  :mode "\\.jinja$"
+  :custom
+  (web-mode-markup-indent-offset 2)
+  (web-mode-attr-indent-offset 2)
+  (web-mode-attr-value-indent-offset 2)
+  (web-mode-code-indent-offset 2)
+  (web-mode-css-indent-offset 2)
+  (web-mode-code-indent-offset 2)
+  (web-mode-enable-auto-closing t)
+  (web-mode-enable-auto-pairing t)
+  (web-mode-enable-comment-keywords t)
+  (web-mode-enable-current-element-highlight t))
 
 (use-package company-web
-  :hook (web-mode . (lambda ()
-    (add-to-list 'company-backends 'company-web-html)
-    (add-to-list 'company-backends 'company-web-jade)
-    (add-to-list 'company-backends 'company-web-slim))))
+  :after web-mode
+  :config
+  (set-company-backend! 'web-mode 'company-web-html))
 
 (use-package emmet-mode
   :hook (web-mode sgml-mode html-mode css-mode))
@@ -157,8 +269,7 @@
 (use-package rainbow-mode
   :hook css-mode)
 
-(setq indent-tabs-mode nil)
-(my-setup-indent 2)
+(ms|setup-indentation 2)
 
 (provide 'setup-langs)
 ;;; setup-langs.el ends here
