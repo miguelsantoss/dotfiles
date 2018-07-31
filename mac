@@ -1,0 +1,145 @@
+#!/bin/sh
+
+# Welcome to the thoughtbot laptop script!
+# Be prepared to turn your laptop (or desktop, no haters here)
+# into an awesome development machine.
+
+fancy_echo() {
+  local fmt="$1"; shift
+
+  printf "\\n$fmt\\n" "$@"
+}
+
+append_to_zshrc() {
+  local text="$1" zshrc
+  local skip_new_line="${2:-0}"
+
+  if [ -w "$HOME/.zshrc.local" ]; then
+    zshrc="$HOME/.zshrc.local"
+  else
+    zshrc="$HOME/.zshrc"
+  fi
+
+  if ! grep -Fqs "$text" "$zshrc"; then
+    if [ "$skip_new_line" -eq 1 ]; then
+      printf "%s\\n" "$text" >> "$zshrc"
+    else
+      printf "\\n%s\\n" "$text" >> "$zshrc"
+    fi
+  fi
+}
+
+set -e
+
+if [ ! -d "$HOME/.bin/" ]; then
+  mkdir "$HOME/.bin"
+fi
+
+if [ ! -f "$HOME/.zshrc" ]; then
+  touch "$HOME/.zshrc"
+fi
+
+append_to_zshrc 'export PATH="$HOME/.bin:$PATH"'
+
+HOMEBREW_PREFIX="/usr/local"
+
+if [ -d "$HOMEBREW_PREFIX" ]; then
+  if ! [ -r "$HOMEBREW_PREFIX" ]; then
+    sudo chown -R "$LOGNAME:admin" /usr/local
+  fi
+else
+  sudo mkdir "$HOMEBREW_PREFIX"
+  sudo chflags norestricted "$HOMEBREW_PREFIX"
+  sudo chown -R "$LOGNAME:admin" "$HOMEBREW_PREFIX"
+fi
+
+update_shell() {
+  local shell_path;
+  shell_path="$(command -v zsh)"
+
+  fancy_echo "Changing your shell to zsh ..."
+  if ! grep "$shell_path" /etc/shells > /dev/null 2>&1 ; then
+    fancy_echo "Adding '$shell_path' to /etc/shells"
+    sudo sh -c "echo $shell_path >> /etc/shells"
+  fi
+  sudo chsh -s "$shell_path" "$USER"
+}
+
+case "$SHELL" in
+  */zsh)
+    if [ "$(command -v zsh)" != '/usr/local/bin/zsh' ] ; then
+      update_shell
+    fi
+    ;;
+  *)
+    update_shell
+    ;;
+esac
+
+if ! command -v brew >/dev/null; then
+  fancy_echo "Installing Homebrew ..."
+    curl -fsS \
+      'https://raw.githubusercontent.com/Homebrew/install/master/install' | ruby
+
+    append_to_zshrc '# recommended by brew doctor'
+
+    append_to_zshrc 'export PATH="/usr/local/bin:$PATH"' 1
+
+    export PATH="/usr/local/bin:$PATH"
+fi
+
+if brew list | grep -Fq brew-cask; then
+  fancy_echo "Uninstalling old Homebrew-Cask ..."
+  brew uninstall --force brew-cask
+fi
+
+fancy_echo "Updating Homebrew formulae ..."
+brew update --force # https://github.com/Homebrew/brew/issues/1151
+brew bundle --file=- <<EOF
+tap "homebrew/services"
+tap "universal-ctags/universal-ctags"
+tap "caskroom/cask"
+
+# Unix
+brew "universal-ctags", args: ["HEAD"]
+brew "git"
+brew "reattach-to-user-namespace"
+brew "the_silver_searcher"
+brew "ripgrep"
+brew "fd"
+brew "tmux"
+brew "vim"
+brew "neovim"
+brew "watchman"
+brew "zsh"
+brew "zsh-completions"
+brew "zsh-autosuggestions"
+brew "zsh-syntax-highlighting"
+
+# GitHub
+brew "hub"
+
+# Image manipulation
+brew "imagemagick"
+
+# Programming language prerequisites and package managers
+brew "libyaml" # should come after openssl
+brew "coreutils"
+brew "yarn"
+
+brew "rbenv"
+tap "d12frosted/emacs-plus"
+brew "emacs-plus", args: ["HEAD", "without-spacemacs-icon"]
+
+# Databases
+brew "postgres", restart_service: :changed
+brew "redis", restart_service: :changed
+EOF
+
+curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+vim +PlugInstall +qall
+# curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+
+# brew "openssl"
+# brew "rcm"
+# cask "gpg-suite"
