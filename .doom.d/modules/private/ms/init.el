@@ -26,6 +26,8 @@
 (add-hook 'git-commit-setup-hook '(lambda () (run-with-timer 0.4 nil #'icn-commit-message-template)) t)
 
 (defun ms/config-company ()
+  (interactive)
+  (setq company-minimum-prefix-length 0)
   (setq company-idle-delay 0))
 
 (defun ms/ag-rg-config ()
