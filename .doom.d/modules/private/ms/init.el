@@ -1,5 +1,5 @@
-(setq doom-font (font-spec :family "Monaco" :size 13))
-;; (setq doom-theme 'doom-dracula)
+(setq doom-font (font-spec :family "Monaco" :size 12))
+(setq doom-theme 'doom-molokai)
 
 (defun set-custom-keys ()
     (map! "C-s" #'counsel-grep-or-swiper
@@ -23,7 +23,15 @@
   (end-of-line)
   (evil-append 0))
 
-(add-hook 'git-commit-setup-hook '(lambda () (run-with-timer 0.2 nil #'icn-commit-message-template)) t)
+(add-hook 'git-commit-setup-hook '(lambda () (run-with-timer 0.4 nil #'icn-commit-message-template)) t)
+
+(defun ms/config-company ()
+  (setq company-idle-delay 0))
+
+(defun ms/ag-rg-config ()
+  (interactive)
+  (setq counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_docker %s ")
+  (setq counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s "))
 
 (defun ms/config ()
   (interactive)
@@ -31,10 +39,10 @@
   (setq mac-right-option-modifier nil)
   (setq projectile-enable-caching t)
   (setq projectile-keymap-prefix (kbd "C-c p"))
-  (setq counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_docker %s ")
-  (setq counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s "))
+  (ms/ag-rg-config))
 
 (defun ivy-config ()
+  (interactive)
   (setq ivy-initial-inputs-alist nil)
   (setq ivy-extra-directories nil)
   (setq ivy-re-builders-alist '((t . ivy--regex-ignore-order)))
