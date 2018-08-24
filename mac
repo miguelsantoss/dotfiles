@@ -112,6 +112,9 @@ brew "vim"
 brew "neovim"
 brew "watchman"
 brew "zsh"
+brew "bat"
+brew "diff-so-fancy"
+brew "tldr"
 brew "phantomjs"
 
 # GitHub
