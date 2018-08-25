@@ -1,7 +1,11 @@
 #!/bin/bash
-if [ "$(sudo asus-kbd-backlight show)" -eq "0" ]; then
-  sudo asus-kbd-backlight night
-  exit;
+
+value=$(sudo asus-kbd-backlight show)
+
+if [ "$1" = "inc" ]; then
+  value=$((value+1))
 else
-  sudo asus-kbd-backlight 0
+  value=$((value-1))
 fi
+
+sudo asus-kbd-backlight $value
