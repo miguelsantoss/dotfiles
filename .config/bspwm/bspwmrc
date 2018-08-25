@@ -1,5 +1,7 @@
 #!/bin/bash
+bspwm
 
+ ~/bin/launch_polybar
 killall sxhkd
 sxhkd &
 
@@ -18,7 +20,8 @@ getcolors () {
 
 getcolors
 
-bspc monitor -d 1 2 3 4 5
+# bspc monitor -d 1 2 3 4 5
+bspc monitor -d '' '' '' '' '' '' '' ''
 
 bspc config border_width          2
 bspc config window_gap            8
@@ -40,7 +43,6 @@ bspc config normal_border_color "$BACKGROUND"
 bspc config active_border_color "$MAGENTA"
 bspc config presel_feedback_color "$MAGENTA"
 
-bspc rule -r *:*
 bspc rule -a * state=tiling
 bspc rule -a Gimp state=tiling follow=on
 # Customization

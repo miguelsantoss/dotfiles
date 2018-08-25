@@ -1,0 +1,165 @@
+[colors]
+bg = ${xrdb:background}
+fg = ${xrdb:foreground}
+
+
+blk = ${xrdb:color0}
+red = ${xrdb:color1}
+grn = ${xrdb:color2}
+ylw = ${xrdb:color3}
+blu = ${xrdb:color4}
+mag = ${xrdb:color5}
+cyn = ${xrdb:color6}
+wht = ${xrdb:color7}
+
+bblk = ${xrdb:color8}
+bred = ${xrdb:color9}
+bgrn = ${xrdb:color10}
+bylw = ${xrdb:color11}
+bblu = ${xrdb:color12}
+bmag = ${xrdb:color13}
+bcyn = ${xrdb:color14}
+bwht = ${xrdb:color15}
+
+[bar/base]
+monitor = ${env:MONITOR:eDP1}
+width    = 100%
+height   = 24
+offset-x = 0
+offset-y = 0
+
+background = ${colors.bg}
+foreground = ${colors.fg}
+border-color = ${colors.bg}
+
+font-0 = Go:size=10;2
+font-1 = FontAwesome:size=10;2
+
+modules-left   = workspaces
+modules-center = title
+modules-right  = volume battery date
+
+border-size         = 6
+padding-left        = 0
+padding-right       = 0
+module-margin-left  = 1
+module-margin-right = 0
+
+bottom = false
+
+[module/workspaces]
+
+type            = internal/bspwm
+strip-wsnumbers = true
+enable-scroll   = false
+enable-click    = false
+
+format          = <label-state> <label-mode>
+label-monitor   = %name%
+
+label-mode-background = ${colors.bg}
+label-mode-foreground = ${colors.fg}
+label-mode-padding    = 4
+
+label-focused            = %name%
+label-focused-background = ${colors.blu}
+label-focused-foreground = ${colors.bg}
+label-focused-padding    = 4
+
+label-occupied            = %name%
+label-occupied-background = ${colors.bg}
+label-occupied-foreground = ${colors.fg}
+label-occupied-padding    = 4
+
+label-empty            = %name%
+label-empty-background = ${colors.bg}
+label-empty-foreground = ${colors.fg}
+label-empty-padding    = 4
+
+label-urgent            = %name%
+label-urgent-background = ${colors.bg}
+label-urgent-foreground = ${colors.fg}
+label-urgent-padding    = 4
+
+[module/date]
+type                     = internal/date
+interval                 = 5
+label                    = "%date%  %time%"
+date = %a %d
+date-alt = %a %d
+
+time = %H:%M
+time-alt = %H:%M
+
+format-padding           = 2
+
+format-background        = ${colors.fg}
+format-foreground        = ${colors.bg}
+
+[module/title]
+type = internal/xwindow
+label-maxlen = 50
+format-padding = 2
+
+[module/backlight]
+type = internal/backlight
+card = intel_backlight
+enable-scroll = false
+
+format = <label>
+format-prefix = 
+format-padding    = 1
+
+label=%percentage%%
+label-padding = 1
+
+format-background = ${colors.blu}
+format-foreground = ${colors.bg}
+
+[module/volume]
+type = internal/volume
+
+format-volume = <label-volume>
+format-muted = <label-muted>
+
+label-muted             = Muted
+label-muted-padding     = 2
+
+format-volume-prefix = " "
+format-muted-prefix  = " "
+
+format-volume-padding = 2
+format-muted-padding    = 2
+
+format-volume-background = ${colors.mag}
+format-muted-background  = ${colors.mag}
+
+format-volume-foreground = ${colors.bg}
+format-muted-foreground  = ${colors.bg}
+
+[module/battery]
+type          = internal/battery
+full-at       = 98
+battery       = BAT0
+adapter       = AC0
+poll-interval = 5
+
+format-charging-prefix      = " "
+format-discharging-prefix   = " "
+format-full-prefix          = " "
+
+label-charging      = " %percentage%% "
+label-discharging   = " %percentage%% "
+label-full          = " %percentage%% "
+
+format-charging-padding = 1
+format-discharging-padding = 1
+format-full-padding    = 1
+
+format-charging-background = ${colors.grn}
+format-discharging-background = ${colors.red}
+format-full-background    = ${colors.cyn}
+
+format-charging-foreground = ${colors.bg}
+format-discharging-foreground = ${colors.bg}
+format-full-foreground    = ${colors.bg}
