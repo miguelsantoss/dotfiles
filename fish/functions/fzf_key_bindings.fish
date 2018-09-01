@@ -1,1 +1,0 @@
-/home/mvsu/.fzf/shell/key-bindings.fish

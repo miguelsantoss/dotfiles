@@ -1,9 +1,9 @@
 # Start X at login
-if status --is-login
-  if test -z "$DISPLAY" -a (fgconsole) = 1
-    exec startx
-  end
-end
+# if status --is-login
+#   if test -z "$DISPLAY" -a (fgconsole) = 1
+#     exec startx
+#   end
+# end
 
 set -gx PATH $HOME/bin /usr/local/bin $HOME/.fzf/bin $PATH
 
@@ -13,26 +13,12 @@ set -gx FZF_ALT_C_COMMAND 'cd ~; fd --hidden --no-ignore --ignore-case --type d'
 
 set fish_greeting ""
 
-function ctrl_p_vim
-  set file (fzf)
-  [ -n "$file" ]; and vim $file
-end
-
-function open_file
-  set file (fzf)
-  [ -n "$file" ]; and open $file
-end
-
 # longer path prompt
 set -U fish_prompt_pwd_dir_length 0
 
 # aliases
-alias ls="exa -hF --color=auto"
-alias ll="exa -lahF --color=auto"
-alias "cd.."="cd ../"
-alias mkdir="mkdir -p"
-alias cp="cp -r"
-alias scp="scp -r"
+alias ll="ls -lahF --color=auto"
+alias "cd.."="cd .."
 
 alias ga="git add"
 alias gc="git commit -m"
@@ -53,9 +39,9 @@ alias disks='echo "╓───── m o u n t . p o i n t s"; echo "╙──�
 alias record="ffmpeg -f x11grab -s 1366x768 -an -r 16 -loglevel quiet -i :0.0 -b:v 5M -y" #pass a filename
 alias v="vim"
 alias e="emacsclient -c"
-alias rm="rm -r"
 alias setclip="xclip -selection c"
 alias getclip="xclip -selection c -o"
+
 alias gw="cd /mnt/Storage/Downloads"
 alias gy="cd /mnt/Storage/Yarr"
 alias gE="cd /run/media/migui/DOLAN/"
