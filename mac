@@ -116,6 +116,7 @@ brew "bat"
 brew "diff-so-fancy"
 brew "tldr"
 brew "phantomjs"
+brew "ghostscript"
 
 # GitHub
 brew "hub"
