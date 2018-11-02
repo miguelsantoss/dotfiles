@@ -173,8 +173,7 @@
 
 ;; Font
 ;; (defvar ms-font-face "Fira Code")
-;; (defvar +font-face "DejaVu Sans Code")
-(defvar +font-face "Roboto Mono")
+(defvar +font-face "DejaVu Sans Code")
 (defvar +font-size 14)
 
 (defun +set-font ()
@@ -188,6 +187,9 @@
 (+set-font)
 (setq-default line-spacing 2)
 
+(use-package beacon
+  :config
+  (beacon-mode 1))
 
 ;; Nice and simple default light theme.
 (setq custom-theme-directory (concat user-emacs-directory "themes"))
@@ -198,8 +200,6 @@
     (add-to-list 'custom-theme-load-path path)))
 
 (load-theme 'default-black t)
-(load-theme 'tsdh-light t t)
-(load-theme 'ayu t t)
 
 (defun +disable-themes ()
   "Disable all active themes."
@@ -218,6 +218,13 @@
     (setq darkokai-mode-line-padding 2)
     (setq darkokai-distinct-fringe-background nil)
     (load-theme 'darkokai t)))
+
+(use-package zenburn-theme)
+
+(use-package dracula-theme)
+
+(defvar +theme 'dracula)
+(add-hook 'emacs-startup-hook (lambda () (load-theme +theme t)))
 
 ;; Pretty icons
 (use-package all-the-icons)
@@ -301,7 +308,7 @@
 
 
 ;; Disable blinking cursor.
-(blink-cursor-mode 0)
+;; (blink-cursor-mode 0)
 
 
 ;; ================
@@ -396,11 +403,9 @@ point reaches the beginning or end of the buffer, stop there."
 
 (setq disabled-command-function nil)
 
-;; Expand-region allows to gradually expand selection inside words, sentences, expressions, etc.
 (use-package expand-region
-  :config
-  (global-set-key (kbd "s-'") 'er/expand-region)         ;; Cmd+' (apostrophe) to expand
-  (global-set-key (kbd "s-S-'") 'er/contract-region))    ;; Cmd+" (same, but with shift) to contract
+  :bind (("C-=" . er/expand-region)
+         ("C-'" . er/contract-region)))
 
 
 ;; Move-text lines around with meta-up/down.
@@ -451,7 +456,7 @@ point reaches the beginning or end of the buffer, stop there."
 
 
 ;; Comment line or region.
-(global-set-key (kbd "s-/") 'comment-line)
+(global-set-key (kbd "s-/") 'comment-dwim)
 
 
 ;; Visually find and replace text
@@ -460,16 +465,14 @@ point reaches the beginning or end of the buffer, stop there."
   (define-key global-map (kbd "M-s-f") 'vr/replace)
   (define-key global-map (kbd "s-r") 'vr/replace))  ;; Cmd+r find and replace
 
+;; (use-package multiple-cursors
+;;   :bind (("s-d" . mc/mark-next-like-this)
+;;          ("s-D" . mc/mark-previous-like-this)
+;;          ("C-c s-d" . mc/mark-all-like-this-dwim)))
 
-;; Multiple cursors. Similar to Sublime or VS Code.
-(use-package multiple-cursors
-  :config
-  (setq mc/always-run-for-all 1)
-  (global-set-key (kbd "s-d") 'mc/mark-next-like-this)        ;; Cmd+d select next occurrence of region
-  (global-set-key (kbd "s-D") 'mc/mark-all-dwim)              ;; Cmd+Shift+d select all occurrences
-  (global-set-key (kbd "M-s-d") 'mc/edit-beginnings-of-lines) ;; Alt+Cmd+d add cursor to each line in region
-  (define-key mc/keymap (kbd "<return>") nil))
-
+(use-package evil-mc
+  :after evil
+  :config (global-evil-mc-mode 1))
 
 ;; =================
 ;; WINDOW MANAGEMENT
@@ -558,7 +561,9 @@ point reaches the beginning or end of the buffer, stop there."
 
 (use-package smex)  ;; show recent commands when invoking Alt-x (or Cmd+Shift+p)
 (use-package flx)   ;; enable fuzzy matching
-(use-package avy)   ;; enable avy for quick navigation
+
+(use-package avy
+  :bind ("C-c C-SPC" . avy-goto-char))
 
 
 ;; Make Ivy a bit more friendly by adding information to ivy buffers, e.g. description of commands in Alt-x, meta info when switching buffers, etc.
@@ -731,52 +736,8 @@ point reaches the beginning or end of the buffer, stop there."
 (defun my-web-mode-hook ()
   (set (make-local-variable 'company-backends) '(company-css company-web-html company-yasnippet company-files)))
 
-
-;; ===========================
-;; SPELLCHECKING AND THESAURUS
-
-
-;; Spellchecking requires an external command to be available. Install aspell on your Mac, then make it the default checker for Emacs' ispell. Note that personal dictionary is located at ~/.aspell.LANG.pws by default.
-(setq ispell-program-name "aspell")
-
-
-;; Popup window for spellchecking
-(use-package flyspell-correct)
-(use-package flyspell-correct-popup)
-
-
-;; Enable spellcheck on the fly for all text modes. This includes org, latex and LaTeX.
-(add-hook 'text-mode-hook 'flyspell-mode)
-(add-hook 'prog-mode-hook 'flyspell-prog-mode)
-
-
-;; Enable right mouse click on macOS to see the list of suggestions.
-(eval-after-load "flyspell"
-  '(progn
-     (define-key flyspell-mouse-map [down-mouse-3] #'flyspell-correct-word)
-     (define-key flyspell-mouse-map [mouse-3] #'undefined)))
-
-
-;; Spellcheck current word
-(define-key flyspell-mode-map (kbd "s-\\") 'flyspell-correct-previous-word-generic) ;; Cmd+\ spellcheck word with popup
-(define-key flyspell-mode-map (kbd "C-s-\\") 'ispell-word)                          ;; Ctrl+Cmd+\ spellcheck word using built UI
-
-
-;; Search for synonyms
-(use-package powerthesaurus
-  :config
-  (global-set-key (kbd "s-|") 'powerthesaurus-lookup-word-dwim)) ;; Cmd+Shift+\ search thesaurus
-
-
-;; Word definition search
-(use-package define-word
-  :config
-  (global-set-key (kbd "M-\\") 'define-word-at-point))
-
-
 ;; ===========
 ;; PROGRAMMING
-
 
 (use-package markdown-mode)
 
@@ -809,9 +770,15 @@ point reaches the beginning or end of the buffer, stop there."
 ;; ========
 ;; ORG MODE
 
+(defvar org-folder "~/Sync/org")
 
-;; Some basic Org defaults
 (use-package org
+  :demand t
+  :mode (("\\.org$" . org-mode))
+  :bind (("C-c l" . org-store-link)
+         ("C-c a" . org-agenda)
+         ("C-c c" . org-capture))
+
   :config
   (setq org-startup-indented t)         ;; Visually indent sections. This looks better for smaller files.
   (setq org-src-tab-acts-natively t)    ;; Tab in source blocks should act like in major mode
@@ -819,21 +786,44 @@ point reaches the beginning or end of the buffer, stop there."
   (setq org-log-into-drawer t)          ;; State changes for todos and also notes should go into a Logbook drawer
   (setq org-src-fontify-natively t)     ;; Code highlighting in code blocks
   (setq org-log-done 'time)             ;; Add closed date when todo goes to DONE state
-  (setq org-support-shift-select t))    ;; Allow shift selection with arrows.
+  (setq org-support-shift-select t)     ;; Allow shift selection with arrows.
+  (setq org-directory org-folder
+        org-default-notes-file (concat org-folder "/todo.org"))
+  (setq org-agenda-files '(org-folder))
 
+  (setq org-capture-templates
+        '(("t" "Todo" entry (file+headline (lambda () (concat org-folder "/todo.org")) "Todo")
+           "* TODO %? \n  %^t")
+          ("i" "Idea" entry (file+headline (lambda () (concat org-folder "/ideas.org")) "Ideas")
+           "* %? \n %U")
+          ("e" "Tweak" entry (file+headline (lambda () (concat org-folder "/tweaks.org")) "Tweaks")
+           "* %? \n %U")
+          ("l" "Learn" entry (file+headline (lambda () (concat org-folder "/learn.org" )) "Learn")
+           "* %? \n")
+          ("w" "icn" entry (file+headline (lambda () (concat org-folder "/icn.org")) "Work")
+           "* %? \n")
+          ("m" "Check movie" entry (file+headline (lambda () (concat org-folder "/check.org")) "Movies")
+           "* %? %^g")
+          ("n" "Check book" entry (file+headline (lambda () (concat org-folder "/check.org")) "Books")
+           "* %^{book name} by %^{author} %^g")))
 
-;; Store all my org files in ~/org.
-(setq org-directory "~/org")
+  (use-package org-projectile
+    :bind ("C-c n p" . org-projectile-project-todo-completing-read)
+    :config
+    (setq org-projectile-projects-file "~/Sync/org/project_todos.org")
+    (setq org-agenda-files (append org-agenda-files (org-projectile-todo-files))))
 
-
-;; And all of those files should be in included agenda.
-(setq org-agenda-files '("~/org"))
-
+  (use-package org-bullets
+    :config
+    (setq org-hide-leading-stars t)
+    (add-hook 'org-mode-hook
+              (lambda ()
+                (org-bullets-mode t)))))
 
 ;; Open config file by pressing C-x and then C
 (global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
 
-
+;; EVIL CONFIG
 
 (use-package evil
   :init
@@ -890,6 +880,12 @@ point reaches the beginning or end of the buffer, stop there."
 
 (use-package restart-emacs)
 
+(use-package wgrep)
+
+(use-package yasnippet
+  :config
+  (yas-global-mode 1))
+
 (use-package flycheck
   :config
   (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
@@ -903,6 +899,13 @@ point reaches the beginning or end of the buffer, stop there."
     :config
     (flycheck-posframe-mode 1)))
 
+(use-package prettier-js
+  :config
+  (setq prettier-js-args '(
+                           "--single-quote" "true"
+                           "--trailing-comma" "all"
+                           )))
+
 (use-package coffee-mode
   :mode "\\.coffee\\.*"
   :custom
@@ -915,6 +918,49 @@ point reaches the beginning or end of the buffer, stop there."
   (add-λ 'coffee-mode-hook
     (setq-local indent-line-function #'coffee-indent)))
 
+(use-package js
+  :custom
+  (js-indent-level 2)
+  (js-switch-indent-offset 2))
+
+(use-package js2-mode
+  :mode "\\.js\\'"
+  :interpreter
+  ("node" . js2-mode)
+  :hook
+  (js2-mode . js2-imenu-extras-mode)
+  :custom
+  (js2-highlight-level 3)
+  :config
+  (setenv "NODE_NO_READLINE" "1")
+
+  (defun +use-eslint-from-node-modules ()
+    (let* ((root (locate-dominating-file
+                  (or (buffer-file-name) default-directory)
+                  "node_modules"))
+           (eslint (and root
+                        (expand-file-name "node_modules/eslint/bin/eslint.js"
+                                          root))))
+      (when (and eslint (file-executable-p eslint))
+        (setq-local flycheck-javascript-eslint-executable eslint))))
+
+  (add-hook 'flycheck-mode-hook #'+use-eslint-from-node-modules))
+
+(use-package nodejs-repl
+  :defer t)
+
+(use-package rjsx-mode
+  :after js2-mode)
+
+(use-package import-js
+  :hook ((js2-mode . run-import-js)))
+
+(use-package json-mode
+  :mode (("\\.bowerrc$"     . json-mode)
+         ("\\.jshintrc$"    . json-mode)
+         ("\\.json_schema$" . json-mode))
+  :config (setq js-indent-level 2))
+
 (use-package ruby-mode
   :mode
   (("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode))
@@ -925,17 +971,19 @@ point reaches the beginning or end of the buffer, stop there."
   :config
   (setq ruby-indent-level 2
         ruby-indent-tabs-mode nil)
+  ;; encoding comment
   (setq ruby-insert-encoding-magic-comment nil)
+  (setq enh-ruby-add-encoding-comment-on-save nil)
 
   (defun hippie-expand-ruby-symbols (orig-fun &rest args)
     (if (eq major-mode 'ruby-mode)
-        (let ((table (make-syntax-table ruby-mode-syntax-table)))
+        (let ((table (make-syntax-table enh-ruby-mode-syntax-table)))
           (modify-syntax-entry ?: "." table)
           (with-syntax-table table (apply orig-fun args)))
       (apply orig-fun args)))
   (advice-add 'hippie-expand :around #'hippie-expand-ruby-symbols)
 
-  (add-λ 'ruby-mode-hook
+  (add-λ 'enh-ruby-mode-hook
     (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
 
 (defvar +ruby-rbenv-versions nil
@@ -958,7 +1006,7 @@ environment variables."
             +ruby-current-version version-str)
       (when (member version-str +ruby-rbenv-versions)
         (setenv "RBENV_VERSION" version-str))))
-  (add-hook 'ruby-mode-hook #'+detect-rbenv-version)
+  (add-hook 'enh-ruby-mode-hook #'+detect-rbenv-version)
   (global-rbenv-mode 1))
 
 (use-package ruby-tools
@@ -966,22 +1014,27 @@ environment variables."
 
 (use-package robe
   :hook (ruby-mode . robe-mode)
+  :bind (([remap evil-jump-to-tag] . robe-jump))
   :config
   (after company
     (push 'company-robe company-backends)))
 
-(use-package rubocop)
+(use-package ruby-refactor
+  :hook (ruby-mode . ruby-refactor-mode-lauch))
+
+(use-package rubocop
+  :hook (ruby-mode . rubocop-mode))
 
 (use-package rspec-mode
   :bind
   ("s-R" . rspec-rerun)
   :after ruby-mode
   :config
-  (after yasnippet (rspec-install-snippets)))
+  (with-eval-after-load 'yasnippet (rspec-install-snippets)))
 
 (use-package inf-ruby
-  :config
-  (add-hook 'ruby-mode-hook 'inf-ruby-minor-mode))
+  :hook ((ruby-mode . inf-ruby-minor-mode)
+         (compilation-filter . inf-ruby-auto-enter)))
 
 (use-package projectile-rails
   :config
@@ -991,7 +1044,7 @@ environment variables."
 (use-package ruby-hash-syntax
   :after ruby-mode
   :bind
-  (:map ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
+  (:map enh-ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
 
 (use-package feature-mode
   :bind (("C-c C-p" . #'ms/cycle-selenium-phantomjs))
@@ -1012,11 +1065,10 @@ environment variables."
     (if (looking-at "@selenium")
         (ms/change-to "@javascript")
       (if (looking-at "@javascript")
-          (ms/change-to "@selenium")
-        ))))
+          (ms/change-to "@selenium")))))
 
 (defun copy-buffer-file-name ()
-  "copy buffer's full path"
+  "Copy buffer's full path."
   (interactive)
   (when buffer-file-name
     (kill-new (file-truename buffer-file-name))))
@@ -1024,9 +1076,15 @@ environment variables."
 (defun kill-other-buffers ()
   "Kill all other buffers."
   (interactive)
-  (mapc 'kill-buffer
-        (delq (current-buffer)
-              (remove-if-not 'buffer-file-name (buffer-list)))))
+  (mapc 'kill-buffer (cdr (buffer-list (current-buffer)))))
+
+(defun git-file-path (path)
+  "File path in relation to git root."
+  (let* ((root (file-truename (vc-git-root path)))
+         (filename (file-name-nondirectory path))
+         (filename-length (length filename)))
+    (let ((chunk (file-relative-name path root)))
+      (substring chunk 0 (- (length chunk) filename-length)))))
 
 (global-set-key (kbd "s-f") #'copy-buffer-file-name)
 
