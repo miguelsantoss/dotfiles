@@ -4,11 +4,14 @@
 ;; ====
 ;; INIT
 
+(setq user-emacs-directory "~/.emacs.d/")
+(setq gc-cons-threshold (* 10 1024 1024))
+
 (defvar indent-sensitive-modes '(coffee-mode))
 (defvar *is-mac* (eq system-type 'darwin))
 (defvar *is-linux* (eq system-type 'gnu/linux))
-(define-prefix-command 'hemacs-git-map)
-; (bind-key "s-g" #'hemacs-git-map)
+;; (define-prefix-command 'hemacs-git-map)
+;; (bind-key "s-g" #'hemacs-git-map)
 
 ;; Package system and sources.
 (require 'package)
@@ -36,17 +39,18 @@
 (setq use-package-always-ensure t)
 
 
-;; Pass system shell environment to Emacs. This is important primarily for shell inside Emacs, but also things like Org mode export to Tex PDF don't work, since it relies on running external command pdflatex, which is loaded from PATH.
+;; Pass system shell environment to Emacs. This is important primarily for shell inside Emacs,
+;; but also things like Org mode export to Tex PDF don't work, since it relies on running external command pdflatex, which is loaded from PATH.
 (use-package exec-path-from-shell
   :config
   (exec-path-from-shell-initialize))
-
-(use-package use-package-ensure-system-package)
 
 ;; Store custom-file separately, don't freak out when it's not found
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file 'noerror)
 
+;; remember risk variables (dir-locals)
+(defun risky-local-variable-p (sym &optional _ignored) nil)
 
 ;; =============
 ;; MODIFIER KEYS
@@ -96,9 +100,6 @@
 (setq auto-save-default nil)
 (setq make-backup-files nil)
 
-;; garbage collector
-(setq gc-cons-threshold (* 10 1024 1024))
-
 ;; Always prefer newer files
 (setq load-prefer-newer t)
 
@@ -126,6 +127,10 @@
  help-window-select t              ; Select help window so it's easy to quit it with 'q'
 )
 
+;; never kill *scratch* buffer
+(add-hook 'kill-buffer-query-functions
+          (lambda() (not (equal (buffer-name) "*scratch*"))))
+
 ;; mode line settings
 (line-number-mode t)
 (column-number-mode t)
@@ -136,14 +141,6 @@
 (global-unset-key (kbd "s-p"))     ; Don't print
 
 (setq ring-bell-function 'ignore)
-
-;; Things you'd expect from macOS app.
-(global-set-key (kbd "s-s") 'save-buffer)             ;; save
-(global-set-key (kbd "s-S") 'write-file)              ;; save as
-(global-set-key (kbd "s-q") 'save-buffers-kill-emacs) ;; quit
-(global-set-key (kbd "s-a") 'mark-whole-buffer)       ;; select all
-;; (global-set-key (kbd "s-z") 'undo)
-
 
 ;; Delete trailing spaces and add new line in the end of a file on save.
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
@@ -168,7 +165,6 @@
 ;; =======
 ;; VISUALS
 
-
 ;; Enable transparent title bar on macOS
 (when (memq window-system '(mac ns))
   (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
@@ -176,28 +172,52 @@
 
 
 ;; Font
-(when (member "SF Mono" (font-family-list))
-  (set-face-attribute 'default nil :font "SF Mono 10"))
+;; (defvar ms-font-face "Fira Code")
+;; (defvar +font-face "DejaVu Sans Code")
+(defvar +font-face "Roboto Mono")
+(defvar +font-size 14)
+
+(defun +set-font ()
+  "Set fot according to +font-face and +font-size."
+  (interactive)
+  (when (member +font-face (font-family-list))
+    (set-face-attribute 'default nil :font
+                        (concat +font-face " "
+                                (number-to-string +font-size)))))
+
+(+set-font)
 (setq-default line-spacing 2)
 
 
 ;; Nice and simple default light theme.
+(setq custom-theme-directory (concat user-emacs-directory "themes"))
+
+(dolist
+    (path (directory-files custom-theme-directory t "\\w+"))
+  (when (file-directory-p path)
+    (add-to-list 'custom-theme-load-path path)))
+
+(load-theme 'default-black t)
 (load-theme 'tsdh-light t t)
-(load-theme 'tsdh-dark t t)
+(load-theme 'ayu t t)
 
-(use-package apropospriate-theme
+(defun +disable-themes ()
+  "Disable all active themes."
+  (dolist (i custom-enabled-themes)
+    (disable-theme i)))
+
+(defadvice load-theme (before disable-themes-first activate)
+  "Disable active themes before loading the new theme."
+  (+disable-themes))
+
+(use-package darkokai-theme
   :config
-  (load-theme 'apropospriate-light t t)
-  (load-theme 'apropospriate-dark t t))
-
-(use-package zenburn-theme :config (load-theme 'zenburn t))
-
-(use-package cycle-themes
-  :init
-  (setq cycle-themes-theme-list
-        '(apropospriate-dark apropospriate-light))
-  :config
-  (cycle-themes-mode))
+  (defun +load-theme-monokai ()
+    "Loads darkokai theme with mode line settings."
+    (interactive)
+    (setq darkokai-mode-line-padding 2)
+    (setq darkokai-distinct-fringe-background nil)
+    (load-theme 'darkokai t)))
 
 ;; Pretty icons
 (use-package all-the-icons)
@@ -215,15 +235,17 @@
 
 ;; Show line numbers
 (global-display-line-numbers-mode 1)
-(define-key global-map (kbd "C-c C-l") 'global-display-line-numbers-mode)
+(define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
 
 ;; Highlight current line
-(global-hl-line-mode 1)
+;; (global-hl-line-mode 1)
 
+(setq-default fill-column 80)
+(setq visual-fill-column-center-text t
+      visual-fill-column-width (+ 6 fill-column))
 
 ;; Show parens and other pairs.
 (use-package smartparens
-  :diminish
   :config
   (require 'smartparens-config)
   (require 'smartparens-ruby)
@@ -237,46 +259,33 @@
   (rich-minority-mode 1)
   (setf rm-blacklist ""))
 
+;; Display dir if two files have the same name
+(use-package uniquify
+  :ensure nil
+  :init
+  (progn
+    (setq uniquify-buffer-name-style 'reverse
+          uniquify-separator "|"
+          uniquify-after-kill-buffer-p t
+          uniquify-ignore-buffers-re "^\\*")))
 
 ;; Set colors to distinguish between active and inactive windows
 (set-face-attribute 'mode-line nil :background "SlateGray1")
 (set-face-attribute 'mode-line-inactive nil :background "grey93")
 
-
-;; File tree
-(use-package neotree
-  :config
-  (setq neo-window-width 32
-        neo-create-file-auto-open t
-        neo-banner-message nil
-        neo-show-updir-line t
-        neo-window-fixed-size nil
-        neo-vc-integration nil
-        neo-mode-line-type 'neotree
-        neo-smart-open t
-        neo-show-hidden-files t
-        neo-mode-line-type 'none
-        neo-auto-indent-point t)
-  (setq neo-theme (if (display-graphic-p) 'nerd 'arrow))
-  (setq neo-hidden-regexp-list '("venv" "\\.pyc$" "~$" "\\.git" "__pycache__" ".DS_Store"))
-  (global-set-key (kbd "s-B") 'neotree-toggle))           ;; Cmd+Shift+b toggle tree
-
-
-;; Show vi-like tilde in the fringe on empty lines.
-(use-package vi-tilde-fringe
-  :config
-  (global-vi-tilde-fringe-mode 1))
-
+(use-package treemacs)
 
 ;; Show full path in the title bar.
-(setq-default frame-title-format "%b (%f)")
+;; (setq-default frame-title-format "%b (%f)")
+(setq-default frame-title-format "")
+(setq ns-use-proxy-icon nil)
 
 
 ;; Never use tabs, use spaces instead.
 (setq tab-width 2)
 (setq js-indent-level 2)
 (setq css-indent-offset 2)
-(setq c-basic-offset 2)
+(setq c-default-style "linux")
 (setq standard-indent 2)
 (setq-default indent-tabs-mode nil)
 (setq-default c-basic-offset 2)
@@ -366,12 +375,12 @@ point reaches the beginning or end of the buffer, stop there."
 (defun unpop-to-mark-command ()
   "Unpop off mark ring. Does nothing if mark ring is empty."
   (interactive)
-      (when mark-ring
-        (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
-        (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
-        (when (null (mark t)) (ding))
-        (setq mark-ring (nbutlast mark-ring))
-        (goto-char (marker-position (car (last mark-ring))))))
+  (when mark-ring
+    (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
+    (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
+    (when (null (mark t)) (ding))
+    (setq mark-ring (nbutlast mark-ring))
+    (goto-char (marker-position (car (last mark-ring))))))
 
 (global-set-key (kbd "s-,") 'my-pop-local-mark-ring)
 (global-set-key (kbd "s-.") 'unpop-to-mark-command)
@@ -385,6 +394,7 @@ point reaches the beginning or end of the buffer, stop there."
 ;; ============
 ;; TEXT EDITING
 
+(setq disabled-command-function nil)
 
 ;; Expand-region allows to gradually expand selection inside words, sentences, expressions, etc.
 (use-package expand-region
@@ -397,8 +407,6 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package move-text
   :config
   (move-text-default-bindings))
-
-
 
 (use-package smart-newline
   :bind
@@ -415,7 +423,7 @@ point reaches the beginning or end of the buffer, stop there."
     (advice-add 'smart-newline :around #'smart-newline-no-reindent-first))
   (def eol-then-smart-newline
     (move-end-of-line nil)
-(smart-newline)))
+    (smart-newline)))
 
 ;; Quickly insert new lines above or below the current line, with correct indentation.
 (defun smart-open-line ()
@@ -493,7 +501,6 @@ point reaches the beginning or end of the buffer, stop there."
 (global-set-key (kbd "M-s-[") 'winner-undo)
 (global-set-key (kbd "M-s-]") 'winner-redo)
 
-
 ;; ==================
 ;; PROJECT MANAGEMENT
 
@@ -501,9 +508,13 @@ point reaches the beginning or end of the buffer, stop there."
 ;; Use Projectile for project management.
 (use-package projectile
   :config
+  (setq projectile-switch-project-action 'projectile-dired)
+  (setq projectile-enable-caching t)
   (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
   (projectile-mode +1))
 
+(global-set-key (kbd "C-x d") 'dired-jump)
+(global-set-key (kbd "C-x C-j") 'dired-jump)
 
 ;; ==========================================
 ;; MENUS AND COMPLETION (not code completion)
@@ -522,25 +533,28 @@ point reaches the beginning or end of the buffer, stop there."
   (setq ivy-re-builders-alist '((t . ivy--regex-ignore-order)))
   (setq ivy-initial-inputs-alist nil)
 
-  (global-set-key (kbd "s-b") 'ivy-switch-buffer)  ;; Cmd+b show buffers and recent files
-  (global-set-key (kbd "M-s-b") 'ivy-resume))      ;; Alt+Cmd+b resume whatever Ivy was doing
+  ;; (global-set-key (kbd "s-b") 'ivy-switch-buffer)  ;; Cmd+b show buffers and recent files
+  ;; (global-set-key (kbd "C-k") 'ivy-immediate-done)
+  (global-set-key (kbd "M-s-b") 'ivy-resume))         ;; Alt+Cmd+b resume whatever Ivy was doing
 
 
 ;; Swiper is a better local finder.
 (use-package swiper
   :config
   (global-set-key "\C-s" 'swiper)       ;; Default Emacs Isearch forward...
-  (global-set-key "\C-r" 'swiper)       ;; ... and Isearch backward replaced with Swiper
-  (global-set-key (kbd "s-f") 'swiper)) ;; Cmd+f find text
-
+  (global-set-key "\C-r" 'swiper))       ;; ... and Isearch backward replaced with Swiper
 
 ;; Better menus with Counsel (a layer on top of Ivy)
 (use-package counsel
+  :custom
+  (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker %s ")
+  (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
   :config
-  (global-set-key (kbd "M-x") 'counsel-M-x)            ;; Alt+x run command
-  (global-set-key (kbd "s-P") 'counsel-M-x)            ;; Cmd+Shift+p run command
-  (global-set-key (kbd "C-x C-f") 'counsel-find-file)  ;; Replace built-in Emacs 'find file' (open file) with Counsel
-  (global-set-key (kbd "s-o") 'counsel-find-file))     ;; Cmd+o open file
+  (global-set-key (kbd "M-x") 'counsel-M-x)
+  (global-set-key (kbd "s-x") 'counsel-M-x)
+  (global-set-key (kbd "C-x f") 'counsel-recentf)  ;; Replace built-in Emacs 'find file' (open file) with Counsel
+  (global-set-key (kbd "C-x C-f") 'counsel-find-file)
+  (global-set-key (kbd "M-i") 'counsel-imenu))
 
 (use-package smex)  ;; show recent commands when invoking Alt-x (or Cmd+Shift+p)
 (use-package flx)   ;; enable fuzzy matching
@@ -559,8 +573,7 @@ point reaches the beginning or end of the buffer, stop there."
   :config
   (counsel-projectile-mode 1)
   (global-set-key (kbd "C-x C-f") 'counsel-find-file)
-  (global-set-key (kbd "s-p") 'counsel-projectile-find-file)         ;; Cmd+p open file in current project
-  (global-set-key (kbd "s-F") 'counsel-projectile-ag))     ;; Cmd+Shift+F search in current git repository
+  (global-set-key (kbd "s-p") 'counsel-projectile-find-file))         ;; Cmd+p open file in current project
 
 
 (setq projectile-completion-system 'ivy)             ;; Use Ivy in Projectile
@@ -573,15 +586,91 @@ point reaches the beginning or end of the buffer, stop there."
 ;; Magit
 (use-package magit
   :bind (("C-x g" . magit-status)
-         ("s-g" . magit-status))
+         ("s-g" . magit-status)
+         ("s-b" . magit-status)
+         ("C-x C-b" . magit-blame-addition))
   :config
-  (setq magit-completing-read-function 'ivy-completing-read))
+  (setq magit-diff-refine-hunk 'all)
+  (setq magit-log-auto-more t)
+  (setq magit-completing-read-function 'ivy-completing-read)
+
+  (defun +magit-display-buffer (buffer)
+    "Like `magit-display-buffer-fullframe-status-v1' with two differences:
+
+1. Magit sub-buffers that aren't spawned from a status screen are opened as
+   popups.
+2. The status screen isn't buried when viewing diffs or logs from the status
+   screen.
+
+   Taken from doom-emacs
+   "
+    (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
+      (display-buffer
+       buffer (cond
+               ;; If opened from an eshell window or popup, use the same window.
+               ((or (derived-mode-p 'eshell-mode)
+                    (eq (window-dedicated-p) 'side))
+                '(display-buffer-same-window))
+               ;; Open target buffers below the current one (we want previous
+               ;; magit windows to be visible; especially magit-status).
+               ((or (bound-and-true-p git-commit-mode)
+                    (derived-mode-p 'magit-mode))
+                (let ((size (if (eq buffer-mode 'magit-process-mode)
+                                0.35
+                              0.7)))
+                  `(display-buffer-below-selected
+                    . ((window-height . ,(truncate (* (window-height) size)))))))
+               ;; log/stash/process buffers, unless opened from a magit-status
+               ;; window, should be opened in popups.
+               ((memq buffer-mode '(magit-process-mode
+                                    magit-log-mode
+                                    magit-stash-mode))
+                '(display-buffer-below-selected))
+               ;; Last resort: use current window
+               ('(display-buffer-same-window))))))
+
+  ;; (defun +magit-display-popup-buffer (buffer &optional alist)
+  ;;   "TODO"
+  ;;   (cond ((eq (window-dedicated-p) 'side)
+  ;;          (if (fboundp '+popup-display-buffer-stacked-side-window)
+  ;;              (+popup-display-buffer-stacked-side-window buffer alist)
+  ;;            (display-buffer-in-side-window buffer alist)))
+  ;;         ((derived-mode-p 'magit-mode)
+  ;;          (display-buffer-below-selected buffer alist))
+  ;;         ((display-buffer-in-side-window buffer alist))))
+
+  (setq magit-display-buffer-function #'+magit-display-buffer)
+  ;; (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
+
+  (defun enforce-git-commit-conventions ()
+    "See https://chris.beams.io/posts/git-commit/"
+    (setq fill-column 72
+          git-commit-summary-max-length 50
+          git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
+  (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
+
+
+(use-package git-messenger
+  :bind (("C-x C-g" . git-messenger:popup-message))
+  :custom
+  (git-messenger:show-detail t))
+
+(use-package git-timemachine
+  :defer t)
 
 ;; Show changes in the gutter
-(use-package git-gutter
+(use-package git-gutter-fringe
   :diminish
   :config
   (global-git-gutter-mode 't)
+  (setq-default fringes-outside-margins t)
+  (define-fringe-bitmap 'git-gutter-fr:added [224]
+    nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:modified [224]
+    nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
+    nil nil 'bottom)
+
   (set-face-background 'git-gutter:modified 'nil)   ;; background color
   (set-face-foreground 'git-gutter:added "green4")
   (set-face-foreground 'git-gutter:deleted "red"))
@@ -601,14 +690,42 @@ point reaches the beginning or end of the buffer, stop there."
 ;; ===============
 ;; CODE COMPLETION
 
-
 (use-package company
-  :config
-  (setq company-idle-delay 0.1)
-  (setq company-global-modes '(not org-mode))
-  (setq company-minimum-prefix-length 1)
-  (add-hook 'after-init-hook 'global-company-mode))
+  :custom
+  (company-idle-delay 0)
+  (company-global-modes '(not org-mode))
+  (company-minimum-prefix-length 1)
+  (company-tooltip-align-annotations t)
+  (company-tooltip-limit 20)
+  (company-echo-delay 0)
+  (company-tooltip-flip-when-above t)
+  (company-require-match nil)
+  (company-minimum-prefix-length 2)
+  (company-show-numbers t)
+  (company-occurrence-weight-function #'company-occurrence-prefer-any-closest)
+  (company-transformers '(company-sort-prefer-same-case-prefix))
+  (company-dabbrev-minimum-length 2)
+  (company-dabbrev-code-modes t)
+  (company-dabbrev-code-everywhere t)
+  :bind
+  ([remap completion-at-point] . company-manual-begin)
+  ([remap complete-symbol] . company-manual-begin)
+  :init
+  (global-company-mode 1)
+  (setq company-continue-commands
+        (append company-continue-commands
+                '(comint-previous-matching-input-from-input
+                  comint-next-matching-input-from-input))))
 
+(use-package company-posframe
+  :after company
+  :config (company-posframe-mode))
+
+(use-package company-quickhelp
+  :after company
+  :config
+  (define-key company-active-map (kbd "C-c h") #'company-quickhelp-manual-begin)
+  (company-quickhelp-mode 1))
 
 ;; Set the company completion vocabulary to css and html when in web-mode.
 (defun my-web-mode-hook ()
@@ -661,8 +778,6 @@ point reaches the beginning or end of the buffer, stop there."
 ;; PROGRAMMING
 
 
-(use-package yaml-mode)
-(use-package haml-mode)
 (use-package markdown-mode)
 
 
@@ -670,14 +785,11 @@ point reaches the beginning or end of the buffer, stop there."
 ;; HTML documents can embed parts (CSS / JavaScript) and blocks (client / server side).
 (use-package web-mode
   :config
+  (setq web-mode-enable-current-element-highlight t)
   (setq web-mode-markup-indent-offset 2)
   (add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.tpl\\.php\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.[agj]sp\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
   (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
   (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.djhtml\\'" . web-mode))
   (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
   (add-to-list 'auto-mode-alist '("\\.js?\\'" . web-mode))
   (add-to-list 'auto-mode-alist '("\\.css?\\'" . web-mode))
@@ -686,14 +798,12 @@ point reaches the beginning or end of the buffer, stop there."
 
 ;; Emmet
 (use-package emmet-mode
+  :hook ((web-mode . emmet-mode)
+         (css-mode . emmet-mode))
   :commands emmet-mode
   :init
   (setq emmet-indentation 2)
-  (setq emmet-move-cursor-between-quotes t)
-  :config
-  (add-hook 'sgml-mode-hook 'emmet-mode) ;; Auto-start on any markup modes
-  (add-hook 'css-mode-hook  'emmet-mode)) ;; enable Emmet's css abbreviation.
-;; Ctrl+j or Ctrl+Enter to expand
+  (setq emmet-move-cursor-between-quotes t))
 
 
 ;; ========
@@ -723,66 +833,108 @@ point reaches the beginning or end of the buffer, stop there."
 ;; Open config file by pressing C-x and then C
 (global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
 
-;; Open private config file by pressing C-x and then c
-;; Contain custom settings to private.el to ensure easy Castlemacs updates.
-(global-set-key (kbd "C-x c") (lambda () (interactive) (find-file "~/.emacs.d/private.el")))
+
 
 (use-package evil
+  :init
+  (setq evil-want-C-u-scroll t
+        evil-symbol-word-search t)
+
+  ;; change cursor to box
+  (setq evil-normal-state-cursor 'box
+        evil-insert-state-cursor 'box
+        evil-visual-state-cursor 'box
+        evil-motion-state-cursor 'box
+        evil-replace-state-cursor 'box
+        evil-operator-state-cursor 'box)
   :config
   (evil-mode 1)
+  (defadvice evil-scroll-page-down
+      (after advice-for-evil-scroll-page-down activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-scroll-page-up
+      (after advice-for-evil-scroll-page-up activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-search-next
+      (after advice-for-evil-search-next activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-search-previous
+      (after advice-for-evil-search-previous activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+
   (use-package evil-visualstar
-    :config
-    (global-evil-visualstar-mode))
+    :after evil
+    :commands (evil-visualstar/begin-search
+               evil-visualstar/begin-search-forward
+               evil-visualstar/begin-search-backward)
+    :init
+    (evil-define-key* 'visual 'global
+                      "*" #'evil-visualstar/begin-search-forward
+                      "#" #'evil-visualstar/begin-search-backward))
+
   (use-package evil-numbers
+    :after evil
     :config
     (define-key evil-normal-state-map (kbd "C-c +") 'evil-numbers/inc-at-pt)
-    (define-key evil-normal-state-map (kbd "C-c -") 'evil-numbers/dec-at-pt)))
+    (define-key evil-normal-state-map (kbd "C-c -") 'evil-numbers/dec-at-pt))
+
+  (use-package evil-matchit
+    :after evil
+    :config
+    (global-evil-matchit-mode 1))
+
+  (use-package evil-surround
+    :after evil
+    :config
+    (global-evil-surround-mode 1)))
 
 (use-package restart-emacs)
 
+(use-package flycheck
+  :config
+  (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
+  (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.7/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
+  (global-flycheck-mode 1)
+  (setq flycheck-indication-mode 'right-fringe)
+  ;; A non-descript, left-pointing arrow
+  (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
+    [16 48 112 240 112 48 16] nil nil 'center)
+  (use-package flycheck-posframe
+    :config
+    (flycheck-posframe-mode 1)))
+
+(use-package coffee-mode
+  :mode "\\.coffee\\.*"
+  :custom
+  (coffee-args-repl '("-i" "--nodejs"))
+  :config
+  (defun coffee-indent ()
+    (if (coffee-line-wants-indent)
+        (coffee-insert-spaces (+ (coffee-previous-indent) coffee-tab-width))
+      (coffee-insert-spaces (coffee-previous-indent))))
+  (add-λ 'coffee-mode-hook
+    (setq-local indent-line-function #'coffee-indent)))
+
 (use-package ruby-mode
   :mode
-  (((rx (and (group (= 1 upper) (1+ lower)) (not (any "Proc"))) "file" eos) . ruby-mode)
-   ("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode)
-   ("Appraisals$" . ruby-mode))
-  :bind
-  (:map ruby-mode-map
-        (","          . self-with-space)
-        ("="          . pad-equals)
-        (":"          . smart-ruby-colon)
-        ("<C-return>" . ruby-newline-dwim))
-  :ensure-system-package
-  ((rubocop     . "gem install rubocop")
-   (ruby-lint   . "gem install ruby-lint")
-   (ripper-tags . "gem install ripper-tags")
-   (pry . "gem install pry"))
+  (("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode))
+  :interpreter "ruby"
+  :bind (([(meta down)] . ruby-forward-sexp)
+         ([(meta up)]   . ruby-backward-sexp)
+         (("C-c C-e"    . ruby-send-region)))  ;; Rebind since Rubocop uses C-c C-r  :config
   :config
   (setq ruby-indent-level 2
         ruby-indent-tabs-mode nil)
   (setq ruby-insert-encoding-magic-comment nil)
-  (def smart-ruby-colon
-    (if (and (looking-back "[[:word:]]" nil)
-             (not (memq font-lock-type-face (list (get-text-property (- (point) 1) 'face)))))
-        (insert ": ")
-      (insert ":")))
-  (def ruby-newline-dwim
-    (let ((add-newline (or (eolp)
-                           (looking-at "\|$")
-                           (looking-at "\)$"))))
-      (move-end-of-line nil)
-      (smart-newline)
-      (insert "end")
-      (move-beginning-of-line nil)
-      (if add-newline
-          (smart-newline)
-        (indent-according-to-mode))))
-  ;; (defun hippie-expand-ruby-symbols (orig-fun &rest args)
-  ;;   (if (eq major-mode 'ruby-mode)
-  ;;       (let ((table (make-syntax-table ruby-mode-syntax-table)))
-  ;;         (modify-syntax-entry ?: "." table)
-  ;;         (with-syntax-table table (apply orig-fun args)))
-  ;;     (apply orig-fun args)))
-  ;; (advice-add 'hippie-expand :around #'hippie-expand-ruby-symbols)
+
+  (defun hippie-expand-ruby-symbols (orig-fun &rest args)
+    (if (eq major-mode 'ruby-mode)
+        (let ((table (make-syntax-table ruby-mode-syntax-table)))
+          (modify-syntax-entry ?: "." table)
+          (with-syntax-table table (apply orig-fun args)))
+      (apply orig-fun args)))
+  (advice-add 'hippie-expand :around #'hippie-expand-ruby-symbols)
+
   (add-λ 'ruby-mode-hook
     (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
 
@@ -790,13 +942,13 @@ point reaches the beginning or end of the buffer, stop there."
   "Available versions of ruby in rbenv.")
 
 (defvar-local +ruby-current-version nil
-"The currently active ruby version.")
+  "The currently active ruby version.")
 
 (use-package rbenv
   :hook (ruby-mode . rbenv-use-corresponding)
   :config
   (setq +ruby-rbenv-versions (split-string (shell-command-to-string "rbenv versions --bare") "\n" t))
-  (defun +ruby|detect-rbenv-version ()
+  (defun +detect-rbenv-version ()
     "Detect the rbenv version for the current project and set the relevant
 environment variables."
     (interactive)
@@ -806,19 +958,19 @@ environment variables."
             +ruby-current-version version-str)
       (when (member version-str +ruby-rbenv-versions)
         (setenv "RBENV_VERSION" version-str))))
-  (add-hook 'ruby-mode-hook #'+ruby|detect-rbenv-version)
+  (add-hook 'ruby-mode-hook #'+detect-rbenv-version)
   (global-rbenv-mode 1))
 
 (use-package ruby-tools
   :after ruby-mode)
 
 (use-package robe
-  :ensure-system-package (pry . "gem install pry pry-doc")
-  :hook (ruby-mode  . robe-mode)
-  :bind (:map robe-mode-map ("M-." . nil))
+  :hook (ruby-mode . robe-mode)
   :config
   (after company
-         (push 'company-robe company-backends)))
+    (push 'company-robe company-backends)))
+
+(use-package rubocop)
 
 (use-package rspec-mode
   :bind
@@ -829,12 +981,7 @@ environment variables."
 
 (use-package inf-ruby
   :config
-  (add-hook 'compilation-filter-hook #'inf-ruby-auto-enter t)
-  (add-hook 'after-init-hook #'inf-ruby-switch-setup)
-  (add-λ 'inf-ruby-mode-hook
-    (turn-on-comint-history ".pry_history"))
-  (bind-key "M-TAB" #'comint-previous-matching-input-from-input inf-ruby-mode-map)
-  (bind-key "<M-S-tab>" #'comint-next-matching-input-from-input inf-ruby-mode-map))
+  (add-hook 'ruby-mode-hook 'inf-ruby-minor-mode))
 
 (use-package projectile-rails
   :config
@@ -845,6 +992,104 @@ environment variables."
   :after ruby-mode
   :bind
   (:map ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
+
+(use-package feature-mode
+  :bind (("C-c C-p" . #'ms/cycle-selenium-phantomjs))
+  :mode "\\.feature$")
+
+(use-package haml-mode
+  :mode "\\.haml$")
+
+(defun ms/change-to (new-mode)
+  (kill-word 1)
+  (insert new-mode))
+
+(defun ms/cycle-selenium-phantomjs ()
+  "toggle selenium to javascript and other way around"
+  (interactive)
+  (save-excursion
+    (goto-line 1)
+    (if (looking-at "@selenium")
+        (ms/change-to "@javascript")
+      (if (looking-at "@javascript")
+          (ms/change-to "@selenium")
+        ))))
+
+(defun copy-buffer-file-name ()
+  "copy buffer's full path"
+  (interactive)
+  (when buffer-file-name
+    (kill-new (file-truename buffer-file-name))))
+
+(defun kill-other-buffers ()
+  "Kill all other buffers."
+  (interactive)
+  (mapc 'kill-buffer
+        (delq (current-buffer)
+              (remove-if-not 'buffer-file-name (buffer-list)))))
+
+(global-set-key (kbd "s-f") #'copy-buffer-file-name)
+
+(use-package cc-mode
+  :if *is-linux*
+  :config
+
+  (defun +fontify-contants ()
+    "Better fontification for preprocessor constants"
+    (font-lock-add-keywords
+     nil '(("\\<[A-Z]*_[A-Z_]+\\>" . font-lock-constant-face)
+           ("\\<[A-Z]\\{3,\\}\\>"  . font-lock-constant-face))
+     t))
+  (add-hook 'c-mode '+fontify-constants)
+
+  (use-package irony
+    :hook (c-mode . irony-mode)
+    :config
+    (setq-default irony-cdb-compilation-databases
+                  '(irony-cdb-libclang irony-cdb-clang-complete))
+    (add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options)
+    (use-package irony-eldoc
+      :hook (irony-mode . irony-eldoc))
+    (use-package flycheck-irony
+      :after flycheck
+      :config
+      (flycheck-irony-setup))
+    (use-package company-irony)
+    (use-package company-irony-c-headers
+      :after company-irony))
+
+  (use-package rtags
+    :custom
+    (rtags-autostart-diagnostics t)
+    (rtags-use-bookmarks nil)
+    (rtags-completions-enabled nil)
+    ;; If not using ivy or helm to view results, use a pop-up window rather
+    ;; than displaying it in the current window...
+    (rtags-results-buffer-other-window t)
+    ;; ...and don't auto-jump to first match before making a selection.
+    (rtags-jump-to-first-match nil)
+    :bind ("C-M-i" . rtags-imenu)
+    :config
+    (use-package ivy-rtags
+      :after ivy
+      :custom
+      (rtags-display-result-backend 'ivy)))
+
+  (use-package clang-format
+    :config
+    (defun +clang-format-hook ()
+      (add-hook 'before-save-hook 'clang-format-buffer))
+    (add-hook 'c-mode '+clang-format-hook))
+
+  (use-package glsl-mode
+    :mode "\\.glsl$"
+    :mode "\\.vert$"
+    :mode "\\.frag$"
+    :mode "\\.geom$")
+
+  (use-package disaster :commands disaster)
+  (use-package make-mode))
+
 
 ;; =======
 ;; THE END
