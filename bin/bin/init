@@ -1,0 +1,29 @@
+#!/bin/sh
+xrdb ~/.Xresources
+
+# allow ctrl s in terminal
+stty -ixon
+~/bin/hdmi-off
+~/bin/init_keyboard
+xsetroot -cursor_name left_ptr
+
+xset +fp ~/.fonts
+xset +fp ~/.fonts/bitmap
+xset fp rehash
+
+dunst &
+# compton --config ~/.config/compton.conf -b &
+[ ! -s ~/.mpd/pid ] && mpd
+
+# feh --bg-fill ~/Pictures/seasideOneUnedited.jpg
+rand_wall
+
+redshift -l 38.7223:9.1393 &
+xbacklight -set 60
+
+# xmodmap -e 'clear Lock' # ensure not getting stuck in caps on mode
+# xmodmap -e 'keycode 0x55=Escape' # remap capsLock = esc
+setxkbmap -option ctrl:nocaps
+
+# ~/bin/launch_polybar
+# ~/bin/vanela &

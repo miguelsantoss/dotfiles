@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# keyboard repeat rate
+xset r rate 250 60
+
+# caps to ctrl
+setxkbmap -option ctrl:nocaps

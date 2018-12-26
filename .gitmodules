@@ -1,9 +1,6 @@
-[submodule "zsh-osx/.zsh/zsh-autosuggestions"]
-	path = zsh-osx/.zsh/zsh-autosuggestions
+[submodule "zsh/.zsh/fast-syntax-highlighting"]
+	path = zsh/.zsh/fast-syntax-highlighting
+	url = https://github.com/zdharma/fast-syntax-highlighting
+[submodule "zsh/.zsh/zsh-autosuggestions"]
+	path = zsh/.zsh/zsh-autosuggestions
 	url = https://github.com/zsh-users/zsh-autosuggestions
-[submodule "zsh-osx/.zsh/zsh-completions"]
-	path = zsh-osx/.zsh/zsh-completions
-	url = https://github.com/zsh-users/zsh-completions
-[submodule "zsh-osx/.zsh/zsh-syntax-highlighting"]
-	path = zsh-osx/.zsh/zsh-syntax-highlighting
-	url = https://github.com/zsh-users/zsh-syntax-highlighting

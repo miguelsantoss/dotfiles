@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e
+
+DATE="$(date -d now "+%d-%m-%Y")"
+FOLDER_NAME="home-ght-$DATE"
+
+borg create -v --stats -C lzma,5 \
+  /run/media/ghost/d9a05c02-dee3-48c8-b8ee-12003c42ae61/redstar::$FOLDER_NAME \
+  /home/ghost \
+  --exclude /home/ghost/Downloads/Yarr \
+  --exclude .local/share/Steam

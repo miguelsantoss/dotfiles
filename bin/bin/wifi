@@ -1,0 +1,5 @@
+#!/bin/bash
+
+wpa_supplicant -B -iwlp2s0 -c /etc/wpa_supplicant.conf -Dwext
+dhclient wlp2s0
+cp /home/miguel/.config/resolv.conf /etc/resolv.conf

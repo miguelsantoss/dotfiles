@@ -1,0 +1,17 @@
+#!/bin/bash
+
+hdmi_active="$(xrandr | grep 'HDMI' | awk '{print $2}')"
+
+if [[ -z "$($xrandr |grep ' connected' |grep 'HDMI' |awk '{print $1}')" ]]; then
+  if [[ "$hdmi_active" = "connected" ]]; then
+    xrandr --output HDMI1 --mode 1920x1080 --pos 1920x0 --rotate normal
+    pactl set-card-profile 0 output:hdmi-stereo-extra1
+  else
+    xrandr --output HDMI1 --off
+    pactl set-card-profile 0 output:analog-stereo
+  fi
+else
+  xrandr --output HDMI1 --off
+  pactl set-card-profile 0 output:analog-stereo
+fi
+

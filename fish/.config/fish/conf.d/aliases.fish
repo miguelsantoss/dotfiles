@@ -1,0 +1,1 @@
+/home/miguel/.config/fisherman/fasd/conf.d/aliases.fish
