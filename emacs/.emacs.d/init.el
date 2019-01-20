@@ -172,17 +172,20 @@
 
 
 ;; Font
-;; (defvar ms-font-face "Fira Code")
-(defvar +font-face "DejaVu Sans Code")
-(defvar +font-size 14)
+(setq +font-face "Roboto Mono")
+(setq +font-face "SF Mono")
+(setq +font-size 13)
+(setq +font-weight 'normal)
+;; (setq mac-allow-anti-aliasing nil)
 
 (defun +set-font ()
   "Set fot according to +font-face and +font-size."
   (interactive)
   (when (member +font-face (font-family-list))
-    (set-face-attribute 'default nil :font
-                        (concat +font-face " "
-                                (number-to-string +font-size)))))
+    (set-face-attribute 'default nil
+                        :font (concat +font-face " "
+                                      (number-to-string +font-size))
+                        :weight  +font-weight)))
 
 (+set-font)
 (setq-default line-spacing 2)
@@ -220,10 +223,10 @@
     (load-theme 'darkokai t)))
 
 (use-package zenburn-theme)
-
 (use-package dracula-theme)
+(use-package solarized-theme)
 
-(defvar +theme 'dracula)
+(defvar +theme 'solarized-dark)
 (add-hook 'emacs-startup-hook (lambda () (load-theme +theme t)))
 
 ;; Pretty icons
@@ -550,7 +553,7 @@ point reaches the beginning or end of the buffer, stop there."
 ;; Better menus with Counsel (a layer on top of Ivy)
 (use-package counsel
   :custom
-  (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker %s ")
+  (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker --ignore lib/assets %s ")
   (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
   :config
   (global-set-key (kbd "M-x") 'counsel-M-x)
@@ -831,12 +834,12 @@ point reaches the beginning or end of the buffer, stop there."
         evil-symbol-word-search t)
 
   ;; change cursor to box
-  (setq evil-normal-state-cursor 'box
-        evil-insert-state-cursor 'box
-        evil-visual-state-cursor 'box
-        evil-motion-state-cursor 'box
-        evil-replace-state-cursor 'box
-        evil-operator-state-cursor 'box)
+  ;; (setq evil-normal-state-cursor 'box
+  ;;       evil-insert-state-cursor 'box
+  ;;       evil-visual-state-cursor 'box
+  ;;       evil-motion-state-cursor 'box
+  ;;       evil-replace-state-cursor 'box
+  ;;       evil-operator-state-cursor 'box)
   :config
   (evil-mode 1)
   (defadvice evil-scroll-page-down
@@ -1147,7 +1150,6 @@ environment variables."
 
   (use-package disaster :commands disaster)
   (use-package make-mode))
-
 
 ;; =======
 ;; THE END

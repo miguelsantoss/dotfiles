@@ -1,1 +1,0 @@
-/home/miguel/.config/fisherman/fasd/functions/s.fish

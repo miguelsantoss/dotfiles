@@ -1,5 +1,5 @@
-alias ls="ls -hF --color=auto"
-alias ll="ls -lahF --color=auto"
+alias ls="ls -hF"
+alias ll="ls -lahF"
 alias "cd.."="cd ../"
 alias mkdir="mkdir -p"
 alias cp="cp -r"
