@@ -1,43 +1,41 @@
-;;; -*- lexical-binding: t -*-
 
+;;; -*- lexical-binding: t -*-
 
 ;; ====
 ;; INIT
 
-(setq user-emacs-directory "~/.emacs.d/")
-(setq gc-cons-threshold (* 10 1024 1024))
+(setq gc-cons-threshold 64000000)
+(add-hook 'after-init-hook #'(lambda ()
+                               ;; restore after startup
+                               (setq gc-cons-threshold 800000)))
 
-(defvar indent-sensitive-modes '(coffee-mode))
 (defvar *is-mac* (eq system-type 'darwin))
 (defvar *is-linux* (eq system-type 'gnu/linux))
-;; (define-prefix-command 'hemacs-git-map)
-;; (bind-key "s-g" #'hemacs-git-map)
 
-;; Package system and sources.
-(require 'package)
-(let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
-                 (not (gnutls-available-p))))
-    (proto (if no-ssl "http" "https")))
-    ;; Comment/uncomment these two lines to enable/disable MELPA and MELPA Stable as desired
-    (add-to-list 'package-archives (cons "melpa" (concat proto "://melpa.org/packages/")) t)
-    ;;(add-to-list 'package-archives (cons "melpa-stable" (concat proto "://stable.melpa.org/packages/")) t)
-    (when (< emacs-major-version 24)
-    ;; For important compatibility libraries like cl-lib
-(add-to-list 'package-archives '("gnu" . (concat proto "://elpa.gnu.org/packages/")))))
+(setq inhibit-startup-screen t
+      package-archives '(("melpa" . "https://melpa.milkbox.net/packages/")
+                         ("gnu" . "https://elpa.gnu.org/packages/")))
 
-(package-initialize)
+(eval-when-compile
+  (require 'package)
+  (package-initialize)
+  (unless (package-installed-p 'use-package)
+    (package-refresh-contents)
+    (package-install 'use-package))
+  (require 'use-package)
+  (setq use-package-always-ensure t))
 
-
-;; We will use 'use-package' to install and configure packages.
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
-  (package-install 'use-package))
-(eval-when-compile (require 'use-package))
-
-
-;; No need to out 'ensure' everywhere, since we don't use anything else to install packages.
-(setq use-package-always-ensure t)
-
+;; ;; Package system and sources.
+;; (require 'package)
+;; (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
+;;                  (not (gnutls-available-p))))
+;;     (proto (if no-ssl "http" "https")))
+;;     ;; Comment/uncomment these two lines to enable/disable MELPA and MELPA Stable as desired
+;;     (add-to-list 'package-archives (cons "melpa" (concat proto "://melpa.org/packages/")) t)
+;;     ;;(add-to-list 'package-archives (cons "melpa-stable" (concat proto "://stable.melpa.org/packages/")) t)
+;;     (when (< emacs-major-version 24)
+;;     ;; For important compatibility libraries like cl-lib
+;; (add-to-list 'package-archives '("gnu" . (concat proto "://elpa.gnu.org/packages/")))))
 
 ;; Pass system shell environment to Emacs. This is important primarily for shell inside Emacs,
 ;; but also things like Org mode export to Tex PDF don't work, since it relies on running external command pdflatex, which is loaded from PATH.
@@ -52,18 +50,17 @@
 ;; remember risk variables (dir-locals)
 (defun risky-local-variable-p (sym &optional _ignored) nil)
 
+(use-package better-defaults)
+
 ;; =============
 ;; MODIFIER KEYS
-
 
 ;; Both command keys are 'Super'
 (setq mac-right-command-modifier 'super)
 (setq mac-command-modifier 'super)
 
-
 ;; Option or Alt is naturally 'Meta'
 (setq mac-option-modifier 'meta)
-
 
 ;; Right Alt (option) can be used to enter symbols like em dashes '—' and euros '€' and stuff.
 (setq mac-right-option-modifier 'nil)
@@ -71,13 +68,11 @@
 ;; Control is control, and you also need to change Caps Lock to Control in the Keyboard
 ;; preferences in macOS.
 
-
 ;; =============
 ;; SANE DEFAULTS
 
-
 ;; Smoother and nicer scrolling
-(setq scroll-margin 0
+(setq scroll-margin 5
       scroll-step 1
       next-line-add-newlines nil
       scroll-conservatively 100000
@@ -92,10 +87,6 @@
 
 (setq tab-always-indent 'complete)
 
-;; Use ESC as universal get me out of here command
-(define-key key-translation-map (kbd "ESC") (kbd "C-g"))
-
-
 ;; Don't bother with auto save and backups.
 (setq auto-save-default nil)
 (setq make-backup-files nil)
@@ -106,10 +97,8 @@
 ;; Warn only when opening files bigger than 100MB
 (setq large-file-warning-threshold 100000000)
 
-
 ;; Move file to trash instead of removing.
 (setq-default delete-by-moving-to-trash t)
-
 
 ;; Revert (update) buffers automatically when underlying files are changed externally.
 (global-auto-revert-mode t)
@@ -120,10 +109,7 @@
  cursor-in-non-selected-windows t  ; Hide the cursor in inactive windows
 
  echo-keystrokes 0.1               ; Show keystrokes right away, don't show the message in the scratch buffer
- initial-scratch-message nil       ; Empty scratch buffer
- initial-major-mode 'org-mode      ; Org mode by default
  sentence-end-double-space nil     ; Sentences should end in one space, come on!
- confirm-kill-emacs 'y-or-n-p      ; y and n instead of yes and no when quitting
  help-window-select t              ; Select help window so it's easy to quit it with 'q'
 )
 
@@ -136,7 +122,7 @@
 (column-number-mode t)
 (size-indication-mode t)
 
-(fset 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
+(defalias 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
 (delete-selection-mode 1)          ; Delete selected text when typing
 (global-unset-key (kbd "s-p"))     ; Don't print
 
@@ -146,10 +132,8 @@
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
 (setq require-final-newline t)
 
-
 ;; Linear undo and redo.
 (use-package undo-tree
-  :diminish undo-tree-mode
   :init
   (progn
     (global-undo-tree-mode)
@@ -158,9 +142,7 @@
           undo-tree-visualizer-timestamps t
           undo-tree-visualizer-diff t)))
 
-(global-set-key (kbd "s-z") 'undo-tree-undo)
-(global-set-key (kbd "s-Z") 'undo-tree-redo)
-
+(global-subword-mode 1)
 
 ;; =======
 ;; VISUALS
@@ -170,12 +152,9 @@
   (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
   (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
 
-
 ;; Font
-(setq +font-face "Roboto Mono")
-(setq +font-face "SF Mono")
+(setq +font-face "Monaco")
 (setq +font-size 13)
-(setq +font-weight 'normal)
 ;; (setq mac-allow-anti-aliasing nil)
 
 (defun +set-font ()
@@ -184,15 +163,9 @@
   (when (member +font-face (font-family-list))
     (set-face-attribute 'default nil
                         :font (concat +font-face " "
-                                      (number-to-string +font-size))
-                        :weight  +font-weight)))
+                                      (number-to-string +font-size)))))
 
 (+set-font)
-(setq-default line-spacing 2)
-
-(use-package beacon
-  :config
-  (beacon-mode 1))
 
 ;; Nice and simple default light theme.
 (setq custom-theme-directory (concat user-emacs-directory "themes"))
@@ -201,8 +174,6 @@
     (path (directory-files custom-theme-directory t "\\w+"))
   (when (file-directory-p path)
     (add-to-list 'custom-theme-load-path path)))
-
-(load-theme 'default-black t)
 
 (defun +disable-themes ()
   "Disable all active themes."
@@ -213,21 +184,13 @@
   "Disable active themes before loading the new theme."
   (+disable-themes))
 
-(use-package darkokai-theme
+(use-package zenburn-theme
   :config
-  (defun +load-theme-monokai ()
-    "Loads darkokai theme with mode line settings."
-    (interactive)
-    (setq darkokai-mode-line-padding 2)
-    (setq darkokai-distinct-fringe-background nil)
-    (load-theme 'darkokai t)))
-
-(use-package zenburn-theme)
+  (load-theme 'zenburn t))
 (use-package dracula-theme)
 (use-package solarized-theme)
 
-(defvar +theme 'solarized-dark)
-(add-hook 'emacs-startup-hook (lambda () (load-theme +theme t)))
+(load-theme 'default-black t)
 
 ;; Pretty icons
 (use-package all-the-icons)
@@ -238,17 +201,18 @@
 (scroll-bar-mode -1)
 (when *is-linux* (menu-bar-mode -1))
 
+;; Disable blinking cursor.
+(blink-cursor-mode 0)
 
 ;; Always wrap lines
 (global-visual-line-mode 1)
-
 
 ;; Show line numbers
 (global-display-line-numbers-mode 1)
 (define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
 
 ;; Highlight current line
-;; (global-hl-line-mode 1)
+(global-hl-line-mode 1)
 
 (setq-default fill-column 80)
 (setq visual-fill-column-center-text t
@@ -262,11 +226,10 @@
   (smartparens-global-mode t)
   (show-smartparens-global-mode t))
 
-
 ;; Hide minor modes from modeline
 (use-package rich-minority
   :config
-  (rich-minority-mode 1)
+  (rich-minority-mode t)
   (setf rm-blacklist ""))
 
 ;; Display dir if two files have the same name
@@ -279,9 +242,9 @@
           uniquify-after-kill-buffer-p t
           uniquify-ignore-buffers-re "^\\*")))
 
-;; Set colors to distinguish between active and inactive windows
-(set-face-attribute 'mode-line nil :background "SlateGray1")
-(set-face-attribute 'mode-line-inactive nil :background "grey93")
+;; ;; Set colors to distinguish between active and inactive windows
+;; (set-face-attribute 'mode-line nil :background "SlateGray1")
+;; (set-face-attribute 'mode-line-inactive nil :background "grey93")
 
 (use-package treemacs)
 
@@ -290,18 +253,16 @@
 (setq-default frame-title-format "")
 (setq ns-use-proxy-icon nil)
 
-
 ;; Never use tabs, use spaces instead.
+(setq-default indent-tabs-mode nil)
 (setq tab-width 2)
 (setq js-indent-level 2)
 (setq css-indent-offset 2)
 (setq c-default-style "linux")
 (setq standard-indent 2)
-(setq-default indent-tabs-mode nil)
 (setq-default c-basic-offset 2)
 (setq-default tab-width 2)
 (setq-default c-basic-indent 2)
-
 
 ;; Show keybindings cheatsheet
 (use-package which-key
@@ -309,23 +270,10 @@
   (which-key-mode)
   (setq which-key-idle-delay 0.5))
 
-
-;; Disable blinking cursor.
-;; (blink-cursor-mode 0)
-
+(use-package restart-emacs)
 
 ;; ================
 ;; BASIC NAVIGATION
-
-
-;; Move around with Cmd+i/j/k/l. This is not for everybody, and it takes away four very well placed
-;; key combinations, but if you get used to using these keys instead of arrows, it will be worth it,
-;; I promise.
-(global-set-key (kbd "s-i") 'previous-line)
-(global-set-key (kbd "s-k") 'next-line)
-(global-set-key (kbd "s-j") 'left-char)
-(global-set-key (kbd "s-l") 'right-char)
-
 
 ;; Kill line with CMD-Backspace. Note that thanks to Simpleclip, killing doesn't rewrite the system clipboard.
 ;; Kill one word with Alt+Backspace.
@@ -333,19 +281,6 @@
 (global-set-key (kbd "s-<backspace>") 'kill-whole-line)
 (global-set-key (kbd "M-S-<backspace>") 'kill-word)
 
-
-;; Use Cmd for movement and selection.
-(global-set-key (kbd "s-<right>") (kbd "C-e"))        ;; End of line
-(global-set-key (kbd "S-s-<right>") (kbd "C-S-e"))    ;; Select to end of line
-(global-set-key (kbd "s-<left>") (kbd "M-m"))         ;; Beginning of line (first non-whitespace character)
-(global-set-key (kbd "S-s-<left>") (kbd "M-S-m"))     ;; Select to beginning of line
-
-(global-set-key (kbd "s-<up>") 'beginning-of-buffer)  ;; First line
-(global-set-key (kbd "s-<down>") 'end-of-buffer)      ;; Last line
-
-
-;; Thanks to Bozhidar Batsov
-;; http://emacsredux.com/blog/2013/]05/22/smarter-navigation-to-the-beginning-of-a-line/
 (defun smarter-move-beginning-of-line (arg)
   "Move point back to indentation of beginning of line.
 
@@ -370,36 +305,39 @@ point reaches the beginning or end of the buffer, stop there."
       (move-beginning-of-line 1))))
 
 (global-set-key (kbd "C-a") 'smarter-move-beginning-of-line)
-(global-set-key (kbd "s-<left>") 'smarter-move-beginning-of-line)
-
 
 ;; Many commands in Emacs write the current position into mark ring.
 ;; These custom functions allow for quick movement backward and forward.
 ;; For example, if you were editing line 6, then did a search with Cmd+f, did something and want to come back,
 ;; press Cmd+, to go back to line 6. Cmd+. to go forward.
 ;; These keys are chosen because they are the same buttons as < and >, think of them as arrows.
-(defun my-pop-local-mark-ring ()
-  (interactive)
-  (set-mark-command t))
+;; (defun my-pop-local-mark-ring ()
+;;   (interactive)
+;;   (set-mark-command t))
 
-(defun unpop-to-mark-command ()
-  "Unpop off mark ring. Does nothing if mark ring is empty."
-  (interactive)
-  (when mark-ring
-    (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
-    (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
-    (when (null (mark t)) (ding))
-    (setq mark-ring (nbutlast mark-ring))
-    (goto-char (marker-position (car (last mark-ring))))))
+;; (defun unpop-to-mark-command ()
+;;   "Unpop off mark ring. Does nothing if mark ring is empty."
+;;   (interactive)
+;;   (when mark-ring
+;;     (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
+;;     (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
+;;     (when (null (mark t)) (ding))
+;;     (setq mark-ring (nbutlast mark-ring))
+;;     (goto-char (marker-position (car (last mark-ring))))))
 
-(global-set-key (kbd "s-,") 'my-pop-local-mark-ring)
-(global-set-key (kbd "s-.") 'unpop-to-mark-command)
+;; (global-set-key (kbd "s-,") 'my-pop-local-mark-ring)
+;; (global-set-key (kbd "s-.") 'unpop-to-mark-command)
 
+(defadvice pop-to-mark-command (around ensure-new-position activate)
+  (let ((p (point)))
+    (when (eq last-command 'save-region-or-current-line)
+      ad-do-it
+      ad-do-it
+      ad-do-it)
+    (dotimes (i 10)
+      (when (= p (point)) ad-do-it))))
 
-;; Same keys with Shift will move you back and forward between open buffers.
-(global-set-key (kbd "s-<") 'previous-buffer)
-(global-set-key (kbd "s->") 'next-buffer)
-
+(setq set-mark-command-repeat-pop t)
 
 ;; ============
 ;; TEXT EDITING
@@ -409,7 +347,6 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package expand-region
   :bind (("C-=" . er/expand-region)
          ("C-'" . er/contract-region)))
-
 
 ;; Move-text lines around with meta-up/down.
 (use-package move-text
@@ -451,65 +388,38 @@ point reaches the beginning or end of the buffer, stop there."
 (global-set-key (kbd "s-<return>") 'smart-open-line)            ;; Cmd+Return new line below
 (global-set-key (kbd "s-S-<return>") 'smart-open-line-above)    ;; Cmd+Shift+Return new line above
 
-
 ;; Upcase and lowercase word or region, if selected.
 ;; To capitalize or un-capitalize word use Alt+c and Alt+l
 (global-set-key (kbd "M-u") 'upcase-dwim)   ;; Alt+u upcase
 (global-set-key (kbd "M-l") 'downcase-dwim) ;; Alt-l lowercase
 
-
-;; Comment line or region.
-(global-set-key (kbd "s-/") 'comment-dwim)
-
-
 ;; Visually find and replace text
 (use-package visual-regexp
   :config
-  (define-key global-map (kbd "M-s-f") 'vr/replace)
   (define-key global-map (kbd "s-r") 'vr/replace))  ;; Cmd+r find and replace
 
-;; (use-package multiple-cursors
-;;   :bind (("s-d" . mc/mark-next-like-this)
-;;          ("s-D" . mc/mark-previous-like-this)
-;;          ("C-c s-d" . mc/mark-all-like-this-dwim)))
-
-(use-package evil-mc
-  :after evil
-  :config (global-evil-mc-mode 1))
-
-;; =================
-;; WINDOW MANAGEMENT
-
+(use-package multiple-cursors
+  :bind (("s-d" . mc/mark-next-like-this)
+         ("s-D" . mc/mark-previous-like-this)
+         ("C-c s-d" . mc/mark-all-like-this-dwim)))
 
 ;; This is rather radical, but saves from a lot of pain in the ass.
 ;; When split is automatic, always split windows vertically
 (setq split-height-threshold 0)
 (setq split-width-threshold nil)
 
-
-;; Go to other windows easily with one keystroke Cmd-something.
-(global-set-key (kbd "s-1") (kbd "C-x 1"))  ;; Cmd-1 kill other windows (keep 1)
-(global-set-key (kbd "s-2") (kbd "C-x 2"))  ;; Cmd-2 split horizontally
-(global-set-key (kbd "s-3") (kbd "C-x 3"))  ;; Cmd-3 split vertically
-(global-set-key (kbd "s-0") (kbd "C-x 0"))  ;; Cmd-0...
-(global-set-key (kbd "s-w") (kbd "C-x 0"))  ;; ...and Cmd-w to close current window
-
-
 ;; Move between windows with Control-Command-Arrow and with =Cmd= just like in iTerm.
 (use-package windmove
-  :bind (("C-s-h" . windmove-left)
-         ("C-s-l" . windmove-right)
-         ("C-s-k" . windmove-up)
-         ("C-s-j" . windmove-down)))
+  :bind (("S-<left>" . windmove-left)
+         ("S-<right>" . windmove-right)
+         ("S-<up>" . windmove-up)
+         ("S-<down>" . windmove-down)))
 
 ;; Enable winner mode to quickly restore window configurations
-(winner-mode 1)
-(global-set-key (kbd "M-s-[") 'winner-undo)
-(global-set-key (kbd "M-s-]") 'winner-redo)
+(winner-mode t)
 
 ;; ==================
 ;; PROJECT MANAGEMENT
-
 
 ;; Use Projectile for project management.
 (use-package projectile
@@ -517,20 +427,47 @@ point reaches the beginning or end of the buffer, stop there."
   (setq projectile-switch-project-action 'projectile-dired)
   (setq projectile-enable-caching t)
   (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
-  (projectile-mode +1))
+  (projectile-mode t))
 
-(global-set-key (kbd "C-x d") 'dired-jump)
-(global-set-key (kbd "C-x C-j") 'dired-jump)
+(use-package dired
+  :ensure nil
+  :hook (dired-mode . dired-hide-details-mode)
+  :config
+  (use-package dired-x
+    :ensure nil)
+
+  (setq dired-dwim-target t)
+  (--each '(dired-do-rename
+            dired-do-copy
+            dired-create-directory
+            wdired-abort-changes)
+    (eval `(defadvice ,it (after revert-buffer activate)
+             (revert-buffer))))
+  (defun dired-back-to-start-of-files ()
+    (interactive)
+    (backward-char (- (current-column) 2)))
+
+  (define-key dired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
+  (define-key dired-mode-map (kbd "k") 'dired-do-delete)
+
+  (put 'dired-find-alternate-file 'disabled nil)
+
+  ;; Delete with C-x C-k to match file buffers and magit
+  (define-key dired-mode-map (kbd "C-x C-k") 'dired-do-delete)
+
+  (eval-after-load "wdired"
+    '(progn
+       (define-key wdired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
+       (define-key wdired-mode-map (vector 'remap 'beginning-of-buffer) 'dired-back-to-top)
+       (define-key wdired-mode-map (vector 'remap 'end-of-buffer) 'dired-jump-to-bottom))))
 
 ;; ==========================================
 ;; MENUS AND COMPLETION (not code completion)
 
-
 ;; Use minimalist Ivy for most things.
 (use-package ivy
-  :diminish                             ;; don't show Ivy in minor mode list
   :config
-  (ivy-mode 1)                          ;; enable Ivy everywhere
+  (ivy-mode t)                          ;; enable Ivy everywhere
   (setq ivy-use-virtual-buffers t)      ;; show bookmarks and recent files in buffer list
   (setq ivy-count-format "(%d/%d) ")
   (setq enable-recursive-minibuffers t)
@@ -546,12 +483,14 @@ point reaches the beginning or end of the buffer, stop there."
 
 ;; Swiper is a better local finder.
 (use-package swiper
+  :after ivy
   :config
   (global-set-key "\C-s" 'swiper)       ;; Default Emacs Isearch forward...
   (global-set-key "\C-r" 'swiper))       ;; ... and Isearch backward replaced with Swiper
 
 ;; Better menus with Counsel (a layer on top of Ivy)
 (use-package counsel
+  :after ivy
   :custom
   (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker --ignore lib/assets %s ")
   (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
@@ -568,39 +507,48 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package avy
   :bind ("C-c C-SPC" . avy-goto-char))
 
+(use-package ace-window
+  :bind (([other-window] . ace-window)))
 
-;; Make Ivy a bit more friendly by adding information to ivy buffers, e.g. description of commands in Alt-x, meta info when switching buffers, etc.
-(use-package ivy-rich
-  :config
-  (ivy-rich-mode 1)
-  (setq ivy-rich-path-style 'abbrev)) ;; Abbreviate paths using abbreviate-file-name (e.g. replace “/home/username” with “~”)
+;; ;; Make Ivy a bit more friendly by adding information to ivy buffers, e.g. description of commands in Alt-x, meta info when switching buffers, etc.
+;; (use-package ivy-rich
+;;   :config
+;;   (ivy-rich-mode t)
+;;   (setq ivy-rich-path-style 'abbrev)) ;; Abbreviate paths using abbreviate-file-name (e.g. replace “/home/username” with “~”)
 
 
 ;; Integrate Projectile with Counsel
 (use-package counsel-projectile
+  :after (counsel projectile)
   :config
   (counsel-projectile-mode 1)
-  (global-set-key (kbd "C-x C-f") 'counsel-find-file)
-  (global-set-key (kbd "s-p") 'counsel-projectile-find-file))         ;; Cmd+p open file in current project
-
+  (global-set-key (kbd "C-x C-f") 'counsel-find-file))
 
 (setq projectile-completion-system 'ivy)             ;; Use Ivy in Projectile
-
 
 ;; ========================
 ;; VERSION CONTROL WITH GIT
 
-
 ;; Magit
 (use-package magit
   :bind (("C-x g" . magit-status)
-         ("s-g" . magit-status)
-         ("s-b" . magit-status)
+         ("C-x m" . #'magit-status-fullscreen)
          ("C-x C-b" . magit-blame-addition))
   :config
   (setq magit-diff-refine-hunk 'all)
   (setq magit-log-auto-more t)
   (setq magit-completing-read-function 'ivy-completing-read)
+
+  (set-default 'magit-push-always-verify nil)
+  (set-default 'magit-revert-buffers 'silent)
+  (set-default 'magit-no-confirm '(stage-all-changes
+                                   unstage-all-changes))
+
+  (defun magit-status-fullscreen (prefix)
+    (interactive "P")
+    (magit-status)
+    (unless prefix
+      (delete-other-windows)))
 
   (defun +magit-display-buffer (buffer)
     "Like `magit-display-buffer-fullframe-status-v1' with two differences:
@@ -637,17 +585,7 @@ point reaches the beginning or end of the buffer, stop there."
                ;; Last resort: use current window
                ('(display-buffer-same-window))))))
 
-  ;; (defun +magit-display-popup-buffer (buffer &optional alist)
-  ;;   "TODO"
-  ;;   (cond ((eq (window-dedicated-p) 'side)
-  ;;          (if (fboundp '+popup-display-buffer-stacked-side-window)
-  ;;              (+popup-display-buffer-stacked-side-window buffer alist)
-  ;;            (display-buffer-in-side-window buffer alist)))
-  ;;         ((derived-mode-p 'magit-mode)
-  ;;          (display-buffer-below-selected buffer alist))
-  ;;         ((display-buffer-in-side-window buffer alist))))
-
-  (setq magit-display-buffer-function #'+magit-display-buffer)
+  ;; (setq magit-display-buffer-function #'+magit-display-buffer)
   ;; (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
 
   (defun enforce-git-commit-conventions ()
@@ -658,49 +596,18 @@ point reaches the beginning or end of the buffer, stop there."
   (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
 
 
-(use-package git-messenger
-  :bind (("C-x C-g" . git-messenger:popup-message))
-  :custom
-  (git-messenger:show-detail t))
+(use-package git-timemachine)
 
-(use-package git-timemachine
-  :defer t)
-
-;; Show changes in the gutter
-(use-package git-gutter-fringe
-  :diminish
+(use-package diff-hl
   :config
-  (global-git-gutter-mode 't)
-  (setq-default fringes-outside-margins t)
-  (define-fringe-bitmap 'git-gutter-fr:added [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:modified [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
-    nil nil 'bottom)
-
-  (set-face-background 'git-gutter:modified 'nil)   ;; background color
-  (set-face-foreground 'git-gutter:added "green4")
-  (set-face-foreground 'git-gutter:deleted "red"))
-
-
-;; ========
-;; TERMINAL
-
-
-(use-package shell-pop
-  :config
-  (custom-set-variables
-   '(shell-pop-shell-type (quote ("ansi-term" "*ansi-term*" (lambda nil (ansi-term shell-pop-term-shell)))))
-   '(shell-pop-universal-key "s-=")))
-
+  (global-diff-hl-mode t))
 
 ;; ===============
 ;; CODE COMPLETION
 
 (use-package company
   :custom
-  (company-idle-delay 0)
+  (company-idle-delay 0.1)
   (company-global-modes '(not org-mode))
   (company-minimum-prefix-length 1)
   (company-tooltip-align-annotations t)
@@ -715,9 +622,6 @@ point reaches the beginning or end of the buffer, stop there."
   (company-dabbrev-minimum-length 2)
   (company-dabbrev-code-modes t)
   (company-dabbrev-code-everywhere t)
-  :bind
-  ([remap completion-at-point] . company-manual-begin)
-  ([remap complete-symbol] . company-manual-begin)
   :init
   (global-company-mode 1)
   (setq company-continue-commands
@@ -737,41 +641,13 @@ point reaches the beginning or end of the buffer, stop there."
 
 ;; Set the company completion vocabulary to css and html when in web-mode.
 (defun my-web-mode-hook ()
-  (set (make-local-variable 'company-backends) '(company-css company-web-html company-yasnippet company-files)))
+  (set (make-local-variable 'company-backends)
+       '(company-css company-web-html company-yasnippet company-files)))
 
 ;; ===========
 ;; PROGRAMMING
 
-(use-package markdown-mode)
-
-
-;; Web-mode is an autonomous emacs major-mode for editing web templates.
-;; HTML documents can embed parts (CSS / JavaScript) and blocks (client / server side).
-(use-package web-mode
-  :config
-  (setq web-mode-enable-current-element-highlight t)
-  (setq web-mode-markup-indent-offset 2)
-  (add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.js?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.css?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.xml?\\'" . web-mode)))
-
-
-;; Emmet
-(use-package emmet-mode
-  :hook ((web-mode . emmet-mode)
-         (css-mode . emmet-mode))
-  :commands emmet-mode
-  :init
-  (setq emmet-indentation 2)
-  (setq emmet-move-cursor-between-quotes t))
-
-
-;; ========
-;; ORG MODE
+(defvar indent-sensitive-modes '())
 
 (defvar org-folder "~/Sync/org")
 
@@ -823,23 +699,46 @@ point reaches the beginning or end of the buffer, stop there."
               (lambda ()
                 (org-bullets-mode t)))))
 
+(use-package markdown-mode)
+(use-package web-mode
+  :config
+  (setq web-mode-enable-current-element-highlight t)
+  (setq web-mode-markup-indent-offset 2)
+  (add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.js?\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.css?\\'" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.xml?\\'" . web-mode)))
+
+(use-package emmet-mode
+  :hook ((web-mode . emmet-mode)
+         (css-mode . emmet-mode))
+  :commands emmet-mode
+  :init
+  (setq emmet-indentation 2)
+  (setq emmet-move-cursor-between-quotes t))
+
+
 ;; Open config file by pressing C-x and then C
 (global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
 
 ;; EVIL CONFIG
 
 (use-package evil
+  :disabled t
   :init
   (setq evil-want-C-u-scroll t
         evil-symbol-word-search t)
 
-  ;; change cursor to box
-  ;; (setq evil-normal-state-cursor 'box
-  ;;       evil-insert-state-cursor 'box
-  ;;       evil-visual-state-cursor 'box
-  ;;       evil-motion-state-cursor 'box
-  ;;       evil-replace-state-cursor 'box
-  ;;       evil-operator-state-cursor 'box)
+  change cursor to box
+  (setq evil-normal-state-cursor 'box
+        evil-insert-state-cursor 'box
+        evil-visual-state-cursor 'box
+        evil-motion-state-cursor 'box
+        evil-replace-state-cursor 'box
+        evil-operator-state-cursor 'box)
   :config
   (evil-mode 1)
   (defadvice evil-scroll-page-down
@@ -881,45 +780,69 @@ point reaches the beginning or end of the buffer, stop there."
     :config
     (global-evil-surround-mode 1)))
 
-(use-package restart-emacs)
-
 (use-package wgrep)
 
 (use-package yasnippet
   :config
-  (yas-global-mode 1))
+  (yas-global-mode 1)
+
+  ;; Jump to end of snippet definition
+  (define-key yas-keymap (kbd "<return>") 'yas-exit-all-snippets)
+
+  ;; Inter-field navigationp
+  (defun yas/goto-end-of-active-field ()
+    (interactive)
+    (let* ((snippet (car (yas--snippets-at-point)))
+           (position (yas--field-end (yas--snippet-active-field snippet))))
+      (if (= (point) position)
+          (move-end-of-line 1)
+        (goto-char position))))
+
+  (defun yas/goto-start-of-active-field ()
+    (interactive)
+    (let* ((snippet (car (yas--snippets-at-point)))
+           (position (yas--field-start (yas--snippet-active-field snippet))))
+      (if (= (point) position)
+          (move-beginning-of-line 1)
+        (goto-char position))))
+
+  ;; ;; No dropdowns please, yas
+  ;; (setq yas-prompt-functions '(yas-ido-prompt yas-completing-prompt))
+
+  ;; No need to be so verbose
+  (setq yas-verbosity 1)
+
+  ;; Wrap around region
+  (setq yas-wrap-around-region t)
+
+  (define-key yas-keymap (kbd "C-e") 'yas/goto-end-of-active-field)
+  (define-key yas-keymap (kbd "C-a") 'yas/goto-start-of-active-field)
+
+  (use-package yasnippet-snippets))
 
 (use-package flycheck
   :config
   (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
-  (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.7/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
+  (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.8/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
+
   (global-flycheck-mode 1)
+
   (setq flycheck-indication-mode 'right-fringe)
+
   ;; A non-descript, left-pointing arrow
   (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
     [16 48 112 240 112 48 16] nil nil 'center)
+
   (use-package flycheck-posframe
     :config
     (flycheck-posframe-mode 1)))
-
-(use-package prettier-js
-  :config
-  (setq prettier-js-args '(
-                           "--single-quote" "true"
-                           "--trailing-comma" "all"
-                           )))
 
 (use-package coffee-mode
   :mode "\\.coffee\\.*"
   :custom
   (coffee-args-repl '("-i" "--nodejs"))
   :config
-  (defun coffee-indent ()
-    (if (coffee-line-wants-indent)
-        (coffee-insert-spaces (+ (coffee-previous-indent) coffee-tab-width))
-      (coffee-insert-spaces (coffee-previous-indent))))
-  (add-λ 'coffee-mode-hook
-    (setq-local indent-line-function #'coffee-indent)))
+  (add-to-list 'indent-sensitive-modes '(coffee-mode)))
 
 (use-package js
   :custom
@@ -968,9 +891,6 @@ point reaches the beginning or end of the buffer, stop there."
   :mode
   (("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode))
   :interpreter "ruby"
-  :bind (([(meta down)] . ruby-forward-sexp)
-         ([(meta up)]   . ruby-backward-sexp)
-         (("C-c C-e"    . ruby-send-region)))  ;; Rebind since Rubocop uses C-c C-r  :config
   :config
   (setq ruby-indent-level 2
         ruby-indent-tabs-mode nil)
@@ -1047,28 +967,29 @@ environment variables."
 (use-package ruby-hash-syntax
   :after ruby-mode
   :bind
-  (:map enh-ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
+  (:map ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
 
 (use-package feature-mode
   :bind (("C-c C-p" . #'ms/cycle-selenium-phantomjs))
-  :mode "\\.feature$")
+  :mode "\\.feature$"
+  :config
+
+  (defun ms/change-to (new-mode)
+    (kill-word 1)
+    (insert new-mode))
+
+  (defun ms/cycle-selenium-phantomjs ()
+    "toggle selenium to javascript and other way around"
+    (interactive)
+    (save-excursion
+      (goto-line 1)
+      (if (looking-at "@selenium")
+          (ms/change-to "@javascript")
+        (if (looking-at "@javascript")
+            (ms/change-to "@selenium"))))))
 
 (use-package haml-mode
   :mode "\\.haml$")
-
-(defun ms/change-to (new-mode)
-  (kill-word 1)
-  (insert new-mode))
-
-(defun ms/cycle-selenium-phantomjs ()
-  "toggle selenium to javascript and other way around"
-  (interactive)
-  (save-excursion
-    (goto-line 1)
-    (if (looking-at "@selenium")
-        (ms/change-to "@javascript")
-      (if (looking-at "@javascript")
-          (ms/change-to "@selenium")))))
 
 (defun copy-buffer-file-name ()
   "Copy buffer's full path."
@@ -1090,66 +1011,6 @@ environment variables."
       (substring chunk 0 (- (length chunk) filename-length)))))
 
 (global-set-key (kbd "s-f") #'copy-buffer-file-name)
-
-(use-package cc-mode
-  :if *is-linux*
-  :config
-
-  (defun +fontify-contants ()
-    "Better fontification for preprocessor constants"
-    (font-lock-add-keywords
-     nil '(("\\<[A-Z]*_[A-Z_]+\\>" . font-lock-constant-face)
-           ("\\<[A-Z]\\{3,\\}\\>"  . font-lock-constant-face))
-     t))
-  (add-hook 'c-mode '+fontify-constants)
-
-  (use-package irony
-    :hook (c-mode . irony-mode)
-    :config
-    (setq-default irony-cdb-compilation-databases
-                  '(irony-cdb-libclang irony-cdb-clang-complete))
-    (add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options)
-    (use-package irony-eldoc
-      :hook (irony-mode . irony-eldoc))
-    (use-package flycheck-irony
-      :after flycheck
-      :config
-      (flycheck-irony-setup))
-    (use-package company-irony)
-    (use-package company-irony-c-headers
-      :after company-irony))
-
-  (use-package rtags
-    :custom
-    (rtags-autostart-diagnostics t)
-    (rtags-use-bookmarks nil)
-    (rtags-completions-enabled nil)
-    ;; If not using ivy or helm to view results, use a pop-up window rather
-    ;; than displaying it in the current window...
-    (rtags-results-buffer-other-window t)
-    ;; ...and don't auto-jump to first match before making a selection.
-    (rtags-jump-to-first-match nil)
-    :bind ("C-M-i" . rtags-imenu)
-    :config
-    (use-package ivy-rtags
-      :after ivy
-      :custom
-      (rtags-display-result-backend 'ivy)))
-
-  (use-package clang-format
-    :config
-    (defun +clang-format-hook ()
-      (add-hook 'before-save-hook 'clang-format-buffer))
-    (add-hook 'c-mode '+clang-format-hook))
-
-  (use-package glsl-mode
-    :mode "\\.glsl$"
-    :mode "\\.vert$"
-    :mode "\\.frag$"
-    :mode "\\.geom$")
-
-  (use-package disaster :commands disaster)
-  (use-package make-mode))
 
 ;; =======
 ;; THE END
