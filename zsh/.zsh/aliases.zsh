@@ -7,7 +7,7 @@ alias scp="scp -r"
 
 alias ga="git add"
 alias gc="git commit -m"
-alias gs="git status"
+# alias gs="git status"
 alias gd="git diff"
 alias gf="git fetch"
 alias gm="git merge"

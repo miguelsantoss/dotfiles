@@ -101,14 +101,14 @@ tap "universal-ctags/universal-ctags"
 tap "caskroom/cask"
 
 # Unix
-brew "universal-ctags", args: ["HEAD"]
 brew "git"
+brew "universal-ctags", args: ["HEAD"]
 brew "reattach-to-user-namespace"
 brew "the_silver_searcher"
 brew "ripgrep"
 brew "fd"
+brew "fasd"
 brew "tmux"
-brew "vim"
 brew "neovim"
 brew "watchman"
 brew "zsh"
@@ -117,21 +117,23 @@ brew "diff-so-fancy"
 brew "tldr"
 brew "phantomjs"
 brew "ghostscript"
+brew "fish"
+brew "fzf"
 
 # GitHub
-brew "hub"
+# brew "hub"
 
 # Image manipulation
-brew "imagemagick"
+brew "imagemagick@6"
 
 # Programming language prerequisites and package managers
 brew "libyaml" # should come after openssl
 brew "coreutils"
-brew "yarn"
 
 brew "rbenv"
 tap "d12frosted/emacs-plus"
 brew "emacs-plus", args: ["HEAD", "without-spacemacs-icon"]
+brew "jemalloc"
 
 # Databases
 brew "postgres", restart_service: :changed
@@ -142,6 +144,6 @@ curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.c
 vim +PlugInstall +qall
 # curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-# brew "openssl"
+brew "openssl"
 # brew "rcm"
 # cask "gpg-suite"

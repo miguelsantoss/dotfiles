@@ -143,7 +143,11 @@
           undo-tree-visualizer-timestamps t
           undo-tree-visualizer-diff t)))
 
-;; (global-subword-mode 1)
+(global-subword-mode 1)
+
+(recentf-mode +1)
+
+(global-set-key (kbd "C-c C-c") 'comment-dwim)
 
 ;; =======
 ;; VISUALS
@@ -154,7 +158,7 @@
   (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
 
 ;; Font
-(setq +font-face "DejaVu Sans Code")
+(setq +font-face "Liberation Mono")
 (setq +font-size 14)
 ;; (setq mac-allow-anti-aliasing nil)
 
@@ -191,6 +195,10 @@
   (load-theme 'dracula t))
 (use-package solarized-theme)
 
+(use-package kaolin-themes)
+
+(use-package ujelly-theme)
+
 ;; (load-theme 'default-black t)
 
 ;; Pretty icons
@@ -215,23 +223,18 @@
 ;; Highlight current line
 ;; (global-hl-line-mode 1)
 
-(setq-default fill-column 80)
-(setq visual-fill-column-center-text t
-      visual-fill-column-width (+ 6 fill-column))
-
 ;; Show parens and other pairs.
 (use-package smartparens
   :config
   (require 'smartparens-config)
-  ;; (require 'smartparens-ruby)
-  (smartparens-global-mode +1)
-  (show-smartparens-global-mode +1))
+  (smartparens-global-mode t)
+  (show-smartparens-global-mode t))
 
 ;; Hide minor modes from modeline
 (use-package rich-minority
   :config
-  (rich-minority-mode +1)
-  (setf rm-blacklist ""))
+  (setf rm-blacklist "")
+  (rich-minority-mode t))
 
 ;; Display dir if two files have the same name
 (use-package uniquify
@@ -407,12 +410,13 @@ point reaches the beginning or end of the buffer, stop there."
   (define-key global-map (kbd "s-r") 'vr/replace))  ;; Cmd+r find and replace
 
 (use-package multiple-cursors
-  :disabled t
+  ;; :disabled (not *disable-evil*)
   :bind (("s-d" . mc/marknext-like-this)
          ("s-D" . mc/mark-previous-like-this)
          ("C-c s-d" . mc/mark-all-like-this-dwim)))
 
 (use-package evil-mc
+  ;; :disabled *disable-evil*
   :config
   (global-evil-mc-mode 1))
 
@@ -513,9 +517,12 @@ point reaches the beginning or end of the buffer, stop there."
 
   ;; Swiper is a better local finder.
   (use-package swiper
-    :config
-    (global-set-key "\C-s" 'swiper)
-    (global-set-key "\C-r" 'swiper))
+    :bind (("C-s" . swiper)))
+
+  (use-package phi-search
+    :disabled t
+    :bind (("C-s" . phi-search)
+           ("C-r" . phi-search-backward)))
 
   ;; Better menus with Counsel (a layer on top of Ivy)
   (use-package counsel
@@ -530,6 +537,7 @@ point reaches the beginning or end of the buffer, stop there."
     (global-set-key (kbd "C-x C-i") 'counsel-imenu))
 
   (use-package counsel-projectile
+    :after projectile
     :config
     (counsel-projectile-mode 1))
 
@@ -538,6 +546,13 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package smex
   :config
   (smex-initialize))
+
+(use-package prescient
+  :config (prescient-persist-mode t))
+
+(use-package ivy-prescient
+  :after ivy
+  :config (ivy-prescient-mode t))
 
 (use-package flx)
 
@@ -643,9 +658,9 @@ point reaches the beginning or end of the buffer, stop there."
 
 (use-package company
   :custom
-  (company-idle-delay 0)
+  (company-idle-delay 0.2)
   (company-global-modes '(not org-mode))
-  (company-minimum-prefix-length 1)
+  (company-minimum-prefix-length 2)
   (company-tooltip-align-annotations t)
   (company-tooltip-limit 20)
   (company-echo-delay 0)
@@ -662,21 +677,31 @@ point reaches the beginning or end of the buffer, stop there."
   ([remap completion-at-point] . company-manual-begin)
   ([remap complete-symbol] . company-manual-begin)
   :init
-  (global-company-mode 1)
+  (global-company-mode t)
   (setq company-continue-commands
         (append company-continue-commands
                 '(comint-previous-matching-input-from-input
                   comint-next-matching-input-from-input))))
 
+(use-package company-flx
+  :disabled t
+  :after company
+  :config
+  (company-flx-mode t)
+  (setq company-flx-limit 100))
+
 (use-package company-posframe
   :after company
-  :config (company-posframe-mode))
+  :config (company-posframe-mode t))
 
 (use-package company-quickhelp
   :after company
   :config
   (define-key company-active-map (kbd "C-c h") #'company-quickhelp-manual-begin)
-  (company-quickhelp-mode 1))
+  (company-quickhelp-mode t))
+
+(use-package company-prescient
+  :config (company-prescient-mode t))
 
 ;; Set the company completion vocabulary to css and html when in web-mode.
 (defun my-web-mode-hook ()
@@ -942,18 +967,19 @@ string).  It returns t if a new completion is found, nil otherwise."
 ;; Open config file by pressing C-x and then C
 (global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
 
-(setq evil-want-C-u-scroll t)
-(setq evil-symbol-word-search t)
+(setq-default evil-want-C-u-scroll t)
+(setq-default evil-want-C-d-scroll t)
+(setq-default evil-symbol-word-search t)
+(setq-default evil-esc-delay 0)
 
 (use-package evil
-  :ensure t
   :init
-  (setq evil-normal-state-cursor 'box
-        evil-insert-state-cursor 'box
-        evil-visual-state-cursor 'box
-        evil-motion-state-cursor 'box
-        evil-replace-state-cursor 'box
-        evil-operator-state-cursor 'box)
+  ;; (setq evil-normal-state-cursor 'box
+  ;;       evil-insert-state-cursor 'bar
+  ;;       evil-visual-state-cursor 'box
+  ;;       evil-motion-state-cursor 'box
+  ;;       evil-replace-state-cursor 'box
+  ;;       evil-operator-state-cursor 'box)
 
   :config
   (defadvice evil-scroll-page-down
@@ -969,7 +995,9 @@ string).  It returns t if a new completion is found, nil otherwise."
       (after advice-for-evil-search-previous activate)
     (evil-scroll-line-to-center (line-number-at-pos)))
 
-  (evil-mode +1)
+  (define-key evil-normal-state-map (kbd "C-u") 'evil-scroll-up)
+
+  (evil-mode t)
 
   (use-package evil-visualstar
     :commands (evil-visualstar/begin-search
@@ -998,7 +1026,8 @@ string).  It returns t if a new completion is found, nil otherwise."
 (use-package yasnippet
   :config
   (yas-global-mode 1)
-  (use-package yasnippet-snippets))
+  (use-package yasnippet-snippets)
+  (global-set-key (kbd "C-c s") 'company-yasnippet))
 
 (use-package flycheck
   :config
@@ -1090,6 +1119,8 @@ string).  It returns t if a new completion is found, nil otherwise."
 (defvar-local +ruby-current-version nil
   "The currently active ruby version.")
 
+(use-package rufo)
+
 (use-package rbenv
   :hook (ruby-mode . rbenv-use-corresponding)
   :config
@@ -1121,6 +1152,7 @@ environment variables."
   :hook (ruby-mode . ruby-refactor-mode))
 
 (use-package rubocop
+  :disabled t
   :hook (ruby-mode . rubocop-mode))
 
 (use-package rspec-mode
@@ -1181,8 +1213,7 @@ Name is relative to the project root.")
     (interactive)
     (save-excursion
       (end-of-line)
-      (open-line 0)
-      (forward-line)
+      (smart-open-line-above)
       (insert "And I debug with pry")
       (indent-according-to-mode)))
 
@@ -1654,3 +1685,76 @@ region-end is used."
     (global-set-key (kbd "C-w") 'kill-region-or-backward-word)
     (global-set-key (kbd "C-c C-k") 'duplicate-current-line-or-region)
     (global-set-key (kbd "C-c C--") 'replace-next-underscore-with-camel)))
+
+(use-package kakoune
+  :disabled t
+  :straight (kakoune :host github :repo "jmorag/kakoune.el")
+  :demand t
+  ;; fd to escape insert mode is something I picked up from trying Spacemacs and can't shake
+  :chords ("fd" . ryo-enter)
+  ;; Having a non-chord way to escape is important, since key-chords don't work in macros
+  :bind ("C-z" . ryo-modal-mode)
+  :config
+  (require 'kakoune)
+  ;; Bar cursor in insert mode, block in normal mode
+  (setq-default cursor-type '(bar . 1))
+  (setq ryo-modal-cursor-type 'box)
+  ;; Start in normal mode when entering prog-mode buffers
+  (add-hook 'prog-mode-hook #'ryo-enter)
+  ;; This gets you spacemacs-esque SPC h help mnemonics
+  (define-key ryo-modal-mode-map (kbd "SPC h") 'help-command)
+  ;; Access all C-x bindings easily
+  (define-key ryo-modal-mode-map (kbd "z") ctl-x-map)
+  ;; I dislike the default kakoune behavior of ;
+  (ryo-modal-unset-key ";")
+  ;; Most of these aren't defaults since they're different from kakoune.
+  ;; The exception is C-u and C-d, which do scroll. They're not included by default since
+  ;; C-u is a very, very important emacs key, and binding it to scroll should be opt-in,
+  ;; not opt-out.
+  (ryo-modal-keys ("," save-buffer)
+                  ("P" yank-pop)
+                  ("m" mc/mark-next-like-this)
+                  ("M" mc/skip-to-next-like-this)
+                  ("n" mc/mark-previous-like-this)
+                  ("N" mc/skip-to-previous-like-this)
+                  ("*" mc/mark-all-like-this)
+                  ("C-v" set-rectangular-region-anchor)
+                  ("M-s" mc/split-region)
+                  (";" (("q" delete-window)
+                        ("v" split-window-horizontally)
+                        ("s" split-window-vertically)
+                        ("i" goto-init-file)))
+                  ("C-h" windmove-left)
+                  ("C-j" windmove-down)
+                  ("C-k" windmove-up)
+                  ("C-l" windmove-right)
+                  ("C-u" scroll-down-command :first '(deactivate-mark))
+                  ("C-d" scroll-up-command :first '(deactivate-mark)))
+
+  ;; This overrides the default mark-in-region with a prettier-looking one,
+  ;; and provides a couple extra commands
+  (use-package visual-regexp
+    :ryo
+    ("s" vr/mc-mark)
+    ("?" vr/replace)
+    ("M-/" vr/query-replace))
+
+  ;; Emacs incremental search doesn't work with multiple cursors, but this fixes that
+  (use-package phi-search
+    :bind (("C-s" . phi-search)
+           ("C-r" . phi-search-backward)))
+
+  ;; Probably the first thing you'd miss is undo and redo, which requires an extra package
+  ;; to work like it does in kakoune (and almost every other editor).
+  (use-package undo-tree
+    :config
+    (global-undo-tree-mode)
+    :ryo
+    ("u" undo-tree-undo)
+    ("U" undo-tree-redo)
+    ("SPC u" undo-tree-visualize)
+    :bind (:map undo-tree-visualizer-mode-map
+                ("h" . undo-tree-visualize-switch-branch-left)
+                ("j" . undo-tree-visualize-redo)
+                ("k" . undo-tree-visualize-undo)
+                ("l" . undo-tree-visualize-switch-branch-right))))
