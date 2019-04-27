@@ -3,10 +3,15 @@
 ;; ====
 ;; INIT
 
-(setq gc-cons-threshold 64000000)
+;;; Code:
+
+(setq ms-original-gc-cons-threshold gc-cons-threshold)
+
 (add-hook 'after-init-hook #'(lambda ()
                                ;; restore after startup
-                               (setq gc-cons-threshold 800000)))
+                               (setq gc-cons-threshold ms-original-gc-cons-threshold)))
+
+(setq gc-cons-threshold (* 5 1000 1000))
 
 (defvar indent-sensitive-modes '(coffee-mode))
 (defvar *is-mac* (eq system-type 'darwin))
@@ -14,35 +19,59 @@
 ;; (define-prefix-command 'hemacs-git-map)
 ;; (bind-key "s-g" #'hemacs-git-map)
 
-;; Package system and sources.
-(require 'package)
-(let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
-                 (not (gnutls-available-p))))
-    (proto (if no-ssl "http" "https")))
-    ;; Comment/uncomment these two lines to enable/disable MELPA and MELPA Stable as desired
-    (add-to-list 'package-archives (cons "melpa" (concat proto "://melpa.org/packages/")) t)
-    ;;(add-to-list 'package-archives (cons "melpa-stable" (concat proto "://stable.melpa.org/packages/")) t)
-    (when (< emacs-major-version 24)
-    ;; For important compatibility libraries like cl-lib
-(add-to-list 'package-archives '("gnu" . (concat proto "://elpa.gnu.org/packages/")))))
+;; Use the develop branch of straight.el
+(setq straight-repository-branch "develop")
+(setq straight-use-package-by-default t)
 
-(package-initialize)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 4))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
 
-;; We will use 'use-package' to install and configure packages.
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
-  (package-install 'use-package))
-(eval-when-compile (require 'use-package))
+(straight-use-package 'use-package)
 
-;; No need to out 'ensure' everywhere, since we don't use anything else to install packages.
+(use-package no-littering
+  :demand t)
+
+(straight-use-package 'org)
+
+(use-package el-patch
+  :straight (:host github
+                   :repo "raxod502/el-patch"
+                   :branch "develop")
+  :demand t)
+
 (setq use-package-always-ensure t)
 
-;; Pass system shell environment to Emacs. This is important primarily for shell inside Emacs,
-;; but also things like Org mode export to Tex PDF don't work, since it relies on running external command pdflatex, which is loaded from PATH.
+(defmacro use-feature (name &rest args)
+  "Like `use-package', but with `straight-use-package-by-default' disabled."
+  (declare (indent defun))
+  `(use-package ,name
+     :straight nil
+     ,@args))
+
+(use-package s)
+(use-package restart-emacs)
+
 (use-package exec-path-from-shell
   :config
-  (exec-path-from-shell-initialize))
+  (setq exec-path-from-shell-check-startup-files nil)
 
+  :init
+  (when *is-mac*
+    (setq exec-path
+          (or (eval-when-compile
+                (require 'cl-lib)
+                (exec-path-from-shell-initialize)
+                (cl-remove-duplicates exec-path :test #'string=))
+              exec-path))))
 
 ;; Store custom-file separately, don't freak out when it's not found
 (setq custom-file "~/.emacs.d/custom.el")
@@ -50,8 +79,6 @@
 
 ;; remember risk variables (dir-locals)
 (defun risky-local-variable-p (sym &optional _ignored) nil)
-
-(use-package better-defaults)
 
 ;; =============
 ;; MODIFIER KEYS
@@ -69,12 +96,15 @@
 ;; Control is control, and you also need to change Caps Lock to Control in the Keyboard
 ;; preferences in macOS.
 
+(setq initial-scratch-message nil)
 ;; =============
 ;; SANE DEFAULTS
 
+(setq default-directory "~/" )
+
 ;; Smoother and nicer scrolling
-(setq scroll-margin 5
-      scroll-step 1
+(setq scroll-margin 0
+      scroll-step 0
       next-line-add-newlines nil
       scroll-conservatively 100000
       scroll-preserve-screen-position 1)
@@ -82,15 +112,17 @@
 (setq mouse-wheel-follow-mouse 't)
 (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
 
-(when *is-linux* (setq x-select-enable-primary nil
-                       x-select-enable-clipboard t
-                       interprogram-paste-function 'x-cut-buffer-or-selection-value))
+(when *is-linux*
+  (setq x-select-enable-primary nil
+        x-select-enable-clipboard t
+        interprogram-paste-function 'x-cut-buffer-or-selection-value))
 
 (setq tab-always-indent 'complete)
 
 ;; Don't bother with auto save and backups.
 (setq auto-save-default nil)
 (setq make-backup-files nil)
+(setq create-lockfiles nil)
 
 ;; Always prefer newer files
 (setq load-prefer-newer +1)
@@ -143,7 +175,7 @@
           undo-tree-visualizer-timestamps t
           undo-tree-visualizer-diff t)))
 
-(global-subword-mode 1)
+(global-subword-mode +1)
 
 (recentf-mode +1)
 
@@ -153,12 +185,12 @@
 ;; VISUALS
 
 ;; Enable transparent title bar on macOS
-(when (memq window-system '(mac ns))
+(when *is-mac*
   (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
   (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
 
 ;; Font
-(setq +font-face "Liberation Mono")
+(setq +font-face "Input Mono Narrow")
 (setq +font-size 14)
 ;; (setq mac-allow-anti-aliasing nil)
 
@@ -190,16 +222,10 @@
   (+disable-themes))
 
 (use-package zenburn-theme)
-(use-package dracula-theme
-  :config
-  (load-theme 'dracula t))
+(use-package dracula-theme)
 (use-package solarized-theme)
 
-(use-package kaolin-themes)
-
-(use-package ujelly-theme)
-
-;; (load-theme 'default-black t)
+(load-theme 'tsdh-light t)
 
 ;; Pretty icons
 (use-package all-the-icons)
@@ -214,10 +240,10 @@
 (blink-cursor-mode 0)
 
 ;; Always wrap lines
-(global-visual-line-mode +1)
+(global-visual-line-mode t)
 
 ;; Show line numbers
-(global-display-line-numbers-mode +1)
+(global-display-line-numbers-mode t)
 (define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
 
 ;; Highlight current line
@@ -226,9 +252,11 @@
 ;; Show parens and other pairs.
 (use-package smartparens
   :config
+
   (require 'smartparens-config)
-  (smartparens-global-mode t)
-  (show-smartparens-global-mode t))
+
+  (smartparens-global-mode +1)
+  (show-smartparens-global-mode +1))
 
 ;; Hide minor modes from modeline
 (use-package rich-minority
@@ -237,18 +265,13 @@
   (rich-minority-mode t))
 
 ;; Display dir if two files have the same name
-(use-package uniquify
-  :ensure nil
+(use-feature uniquify
   :init
   (progn
     (setq uniquify-buffer-name-style 'reverse
           uniquify-separator "|"
           uniquify-after-kill-buffer-p t
           uniquify-ignore-buffers-re "^\\*")))
-
-;; ;; Set colors to distinguish between active and inactive windows
-;; (set-face-attribute 'mode-line nil :background "SlateGray1")
-;; (set-face-attribute 'mode-line-inactive nil :background "grey93")
 
 (use-package treemacs
   :defer t)
@@ -397,28 +420,44 @@ point reaches the beginning or end of the buffer, stop there."
 (global-set-key (kbd "s-<return>") 'smart-open-line)            ;; Cmd+Return new line below
 (global-set-key (kbd "s-S-<return>") 'smart-open-line-above)    ;; Cmd+Shift+Return new line above
 
-
 ;; Upcase and lowercase word or region, if selected.
 ;; To capitalize or un-capitalize word use Alt+c and Alt+l
-(global-set-key (kbd "M-u") 'upcase-dwim)   ;; Alt+u upcase
-(global-set-key (kbd "M-l") 'downcase-dwim) ;; Alt-l lowercase
+(bind-key "M-c" #'capitalize-dwim)
+(bind-key "M-l" #'downcase-dwim)
+(bind-key "M-u" #'upcase-dwim)
 
 ;; Visually find and replace text
 (use-package visual-regexp
-  :config
-  (define-key global-map (kbd "M-s-f") 'vr/replace)
-  (define-key global-map (kbd "s-r") 'vr/replace))  ;; Cmd+r find and replace
+  :bind (("M-%" . vr/query-replace)))
 
 (use-package multiple-cursors
-  ;; :disabled (not *disable-evil*)
-  :bind (("s-d" . mc/marknext-like-this)
+  :bind (("s-d" . mc/mark-next-like-this)
          ("s-D" . mc/mark-previous-like-this)
-         ("C-c s-d" . mc/mark-all-like-this-dwim)))
+         ("C-c s-d" . mc/mark-all-like-this-dwim))
+  :config
+  (multiple-cursors-mode 1))
 
 (use-package evil-mc
-  ;; :disabled *disable-evil*
   :config
   (global-evil-mc-mode 1))
+
+(use-package volatile-highlights
+  :config
+  (vhl/define-extension 'my-evil-highlights
+                        'evil-yank
+                        'evil-paste-after
+                        'evil-paste-before
+                        'evil-move)
+
+  (vhl/install-extension 'my-evil-highlights)
+
+  (vhl/define-extension 'my-undo-tree-highlights
+                        'undo-tree-undo
+                        'undo-tree-redo)
+
+  (vhl/install-extension 'my-undo-tree-highlights)
+
+  (volatile-highlights-mode +1))
 
 ;; =================
 ;; WINDOW MANAGEMENT
@@ -439,27 +478,26 @@ point reaches the beginning or end of the buffer, stop there."
 
 
 ;; Move between windows with Control-Command-Arrow and with =Cmd= just like in iTerm.
-(use-package windmove
+(use-feature windmove
   :bind (("S-<left>" . windmove-left)
          ("S-<right>" . windmove-right)
          ("S-<up>" . windmove-up)
          ("S-<down>" . windmove-down)))
 
-(use-package winner
-  :ensure nil
+(use-feature winner
   :config
   (winner-mode 1))
 
 ;; ==================
 ;; PROJECT MANAGEMENT
 
-(use-package dired
-  :ensure nil
+(use-feature dired
   :after dash
   :hook (dired-mode . dired-hide-details-mode)
   :config
-  (use-package dired-x
-    :ensure nil)
+
+  (use-feature dired-x)
+
 
   (setq dired-dwim-target t)
   (--each '(dired-do-rename
@@ -495,6 +533,10 @@ point reaches the beginning or end of the buffer, stop there."
   (global-set-key (kbd "C-x p s s") 'counsel-projectile-ag)
   (projectile-mode 1))
 
+(use-package deadgrep
+  :defer t
+  :commands (deadgrep))
+
 ;; ==========================================
 ;; MENUS AND COMPLETION (not code completion)
 
@@ -502,7 +544,6 @@ point reaches the beginning or end of the buffer, stop there."
 ;; Use minimalist Ivy for most things.
 (use-package ivy
   :config
-  (ivy-mode 1)                          ;; enable Ivy everywhere
   (setq ivy-use-virtual-buffers t)      ;; show bookmarks and recent files in buffer list
   (setq ivy-count-format "(%d/%d) ")
   (setq enable-recursive-minibuffers t)
@@ -510,6 +551,8 @@ point reaches the beginning or end of the buffer, stop there."
 
   (setq ivy-re-builders-alist '((t . ivy--regex-ignore-order)))
   (setq ivy-initial-inputs-alist nil)
+
+  (ivy-mode t)                          ;; enable Ivy everywhere
 
   ;; (global-set-key (kbd "s-b") 'ivy-switch-buffer)  ;; Cmd+b show buffers and recent files
   ;; (global-set-key (kbd "C-k") 'ivy-immediate-done)
@@ -525,16 +568,97 @@ point reaches the beginning or end of the buffer, stop there."
            ("C-r" . phi-search-backward)))
 
   ;; Better menus with Counsel (a layer on top of Ivy)
+  ;; (use-package counsel
+  ;;   :custom
+  ;;   (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker --ignore lib/assets %s ")
+  ;;   (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
+  ;;   :config
+  ;;   (global-set-key (kbd "M-x") 'counsel-M-x)
+  ;;   (global-set-key (kbd "C-x f") 'counsel-recentf)
+  ;;   (global-set-key (kbd "C-x C-f") 'counsel-find-file)
+  ;;   (global-set-key (kbd "C-x C-i") 'counsel-imenu))
+
   (use-package counsel
-    :custom
-    (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker --ignore lib/assets %s ")
-    (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
-    :config
-    (global-set-key (kbd "M-x") 'counsel-M-x)
-    (global-set-key (kbd "s-x") 'counsel-M-x)
-    (global-set-key (kbd "C-x f") 'counsel-recentf)
-    (global-set-key (kbd "C-x C-f") 'counsel-find-file)
-    (global-set-key (kbd "C-x C-i") 'counsel-imenu))
+    :init/el-patch
+
+    (defvar counsel-mode-map
+      (let ((map (make-sparse-keymap)))
+        (dolist (binding
+                 '((execute-extended-command . counsel-M-x)
+                   (describe-bindings . counsel-descbinds)
+                   (el-patch-remove
+                     (describe-function . counsel-describe-function)
+                     (describe-variable . counsel-describe-variable))
+                   (apropos-command . counsel-apropos)
+                   (describe-face . counsel-describe-face)
+                   (list-faces-display . counsel-faces)
+                   (find-file . counsel-find-file)
+                   (find-library . counsel-find-library)
+                   (imenu . counsel-imenu)
+                   (load-library . counsel-load-library)
+                   (load-theme . counsel-load-theme)
+                   (yank-pop . counsel-yank-pop)
+                   (info-lookup-symbol . counsel-info-lookup-symbol)
+                   (pop-to-mark-command . counsel-mark-ring)
+                   (bookmark-jump . counsel-bookmark)))
+          (define-key map (vector 'remap (car binding)) (cdr binding)))
+        map)
+      (el-patch-concat
+        "Map for `counsel-mode'.
+Remaps built-in functions to counsel replacements."
+        (el-patch-add
+          "\n\nBindings that are remapped by `helpful' have been removed.")))
+
+    (defcustom counsel-mode-override-describe-bindings nil
+      "Whether to override `describe-bindings' when `counsel-mode' is active."
+      :group 'ivy
+      :type 'boolean)
+
+    (define-minor-mode counsel-mode
+      "Toggle Counsel mode on or off.
+Turn Counsel mode on if ARG is positive, off otherwise. Counsel
+mode remaps built-in emacs functions that have counsel
+replacements.
+Local bindings (`counsel-mode-map'):
+\\{counsel-mode-map}"
+      :group 'ivy
+      :global t
+      :keymap counsel-mode-map
+      (el-patch-remove
+        :lighter " counsel")
+      (if counsel-mode
+          (progn
+            (when (and (fboundp 'advice-add)
+                       counsel-mode-override-describe-bindings)
+              (advice-add #'describe-bindings :override #'counsel-descbinds))
+            (define-key minibuffer-local-map (kbd "C-r")
+              'counsel-minibuffer-history))
+        (when (fboundp 'advice-remove)
+          (advice-remove #'describe-bindings #'counsel-descbinds))))
+
+    :init
+
+    (counsel-mode +1)
+
+    :bind* (("C-c k" . counsel-rg)
+            ("s-x" . counsel-M-x))
+    :config/el-patch
+
+    (defcustom counsel-rg-base-command
+      (el-patch-concat
+        "rg -S --no-heading --line-number --color never "
+        (el-patch-add
+          "-z --sort path ")
+        "%s .")
+      (el-patch-concat
+        "Alternative to `counsel-ag-base-command' using ripgrep.
+Note: don't use single quotes for the regex."
+        (el-patch-add
+          "\n\nSupport for searching compressed files and for
+reporting results in a deterministic order has been added by
+`el-patch'."))
+      :type 'string
+      :group 'ivy))
 
   (use-package counsel-projectile
     :after projectile
@@ -557,7 +681,7 @@ point reaches the beginning or end of the buffer, stop there."
 (use-package flx)
 
 (use-package avy
-  :bind ("C-c C-SPC" . avy-goto-char))
+  :bind (("C-c C-SPC" . avy-goto-char)))
 
 (use-package ace-window
   :bind (("C-x o" . ace-window)))
@@ -702,10 +826,6 @@ point reaches the beginning or end of the buffer, stop there."
 
 (use-package company-prescient
   :config (company-prescient-mode t))
-
-;; Set the company completion vocabulary to css and html when in web-mode.
-(defun my-web-mode-hook ()
-  (set (make-local-variable 'company-backends) '(company-css company-web-html company-yasnippet company-files)))
 
 (defvar he-search-loc-backward (make-marker))
 (defvar he-search-loc-forward (make-marker))
@@ -890,17 +1010,22 @@ string).  It returns t if a new completion is found, nil otherwise."
 ;; Web-mode is an autonomous emacs major-mode for editing web templates.
 ;; HTML documents can embed parts (CSS / JavaScript) and blocks (client / server side).
 (use-package web-mode
+  :mode (("\\.phtml\\'" . web-mode)
+         ("\\.tpl\\.php\\'" . web-mode)
+         ("\\.[agj]sp\\'" . web-mode)
+         ("\\.as[cp]x\\'" . web-mode)
+         ("\\.erb\\'" . web-mode)
+         ("\\.mustache\\'" . web-mode)
+         ("\\.djhtml\\'" . web-mode)
+         ("\\.html?\\'" . web-mode))
   :config
-  (setq web-mode-enable-current-element-highlight t)
-  (setq web-mode-markup-indent-offset 2)
-  (add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.js?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.css?\\'" . web-mode))
-  (add-to-list 'auto-mode-alist '("\\.xml?\\'" . web-mode)))
 
+  ;; Indent by two spaces by default.
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
+
+  ;; Autocomplete </ instantly.
+  (setq web-mode-enable-auto-closing t))
 
 ;; Emmet
 (use-package emmet-mode
@@ -974,12 +1099,12 @@ string).  It returns t if a new completion is found, nil otherwise."
 
 (use-package evil
   :init
-  ;; (setq evil-normal-state-cursor 'box
-  ;;       evil-insert-state-cursor 'bar
-  ;;       evil-visual-state-cursor 'box
-  ;;       evil-motion-state-cursor 'box
-  ;;       evil-replace-state-cursor 'box
-  ;;       evil-operator-state-cursor 'box)
+  (setq evil-normal-state-cursor 'box
+        evil-insert-state-cursor 'box
+        evil-visual-state-cursor 'box
+        evil-motion-state-cursor 'box
+        evil-replace-state-cursor 'box
+        evil-operator-state-cursor 'box)
 
   :config
   (defadvice evil-scroll-page-down
@@ -1041,6 +1166,28 @@ string).  It returns t if a new completion is found, nil otherwise."
   (use-package flycheck-posframe
     :config
     (flycheck-posframe-mode 1)))
+
+(use-package dumb-jump
+  :bind* (("C-M-d" . dumb-jump-quick-look)
+          ([remap evil-jump-to-tag] . dumb-jump-go)))
+
+(use-package lsp-mode
+  :config
+  (use-package lsp-ui
+    :hook (lsp-mode . lsp-ui-mode)
+    :config
+    (setq lsp-prefer-flymake nil)
+    (setq lsp-ui-doc-max-height 8)
+    (setq lsp-ui-doc-max-width 35)
+    (setq lsp-ui-sideline-ignore-duplicate t))
+
+  (use-package company-lsp
+    :config
+    (setq company-transformers nil)
+    (setq company-lsp-async t)
+    (setq company-lsp-enable-recompletion t)
+    (setq company-lsp-enable-snippet t)
+    (push 'company-lsp company-backends)))
 
 (use-package coffee-mode
   :mode "\\.coffee\\.*"
@@ -1119,8 +1266,6 @@ string).  It returns t if a new completion is found, nil otherwise."
 (defvar-local +ruby-current-version nil
   "The currently active ruby version.")
 
-(use-package rufo)
-
 (use-package rbenv
   :hook (ruby-mode . rbenv-use-corresponding)
   :config
@@ -1138,9 +1283,6 @@ environment variables."
   (add-hook 'enh-ruby-mode-hook #'+detect-rbenv-version)
   (global-rbenv-mode 1))
 
-(use-package ruby-tools
-  :after ruby-mode)
-
 (use-package robe
   :hook (ruby-mode . robe-mode)
   :bind (([remap evil-jump-to-tag] . robe-jump))
@@ -1148,19 +1290,13 @@ environment variables."
   (after company
     (push 'company-robe company-backends)))
 
-(use-package ruby-refactor
-  :hook (ruby-mode . ruby-refactor-mode))
-
-(use-package rubocop
-  :disabled t
-  :hook (ruby-mode . rubocop-mode))
-
 (use-package rspec-mode
+  :after ruby-mode
   :bind
   ("s-R" . rspec-rerun)
-  :after ruby-mode
   :config
-  (with-eval-after-load 'yasnippet (rspec-install-snippets)))
+  (with-eval-after-load 'yasnippet
+    (rspec-install-snippets)))
 
 (use-package inf-ruby
   :hook ((ruby-mode . inf-ruby-minor-mode)
@@ -1192,16 +1328,11 @@ Name is relative to the project root.")
                  "'\n")))))
   (global-set-key (kbd "C-c M-j") #'+run-ruby-console))
 
-(use-package projectile-rails
-  :after projectile
-  :config
-  (setq projectile-rails-keymap-prefix (kbd "C-c r"))
-  (projectile-rails-global-mode 1))
-
-(use-package ruby-hash-syntax
-  :after ruby-mode
-  :bind
-  (:map ruby-mode-map ("C-c C-:" . ruby-hash-syntax-toggle)))
+;; (use-package projectile-rails
+;;   :after projectile
+;;   :config
+;;   (setq projectile-rails-keymap-prefix (kbd "C-c r"))
+;;   (projectile-rails-global-mode 1))
 
 (use-package feature-mode
   :bind (("C-c C-p" . #'+cycle-selenium-phantomjs)
@@ -1254,66 +1385,6 @@ Name is relative to the project root.")
       (substring chunk 0 (- (length chunk) filename-length)))))
 
 (global-set-key (kbd "s-f") #'copy-buffer-file-name)
-
-(use-package cc-mode
-  :if *is-linux*
-  :config
-
-  (defun +fontify-contants ()
-    "Better fontification for preprocessor constants"
-    (font-lock-add-keywords
-     nil '(("\\<[A-Z]*_[A-Z_]+\\>" . font-lock-constant-face)
-           ("\\<[A-Z]\\{3,\\}\\>"  . font-lock-constant-face))
-     t))
-  (add-hook 'c-mode '+fontify-constants)
-
-  (use-package irony
-    :hook (c-mode . irony-mode)
-    :config
-    (setq-default irony-cdb-compilation-databases
-                  '(irony-cdb-libclang irony-cdb-clang-complete))
-    (add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options)
-    (use-package irony-eldoc
-      :hook (irony-mode . irony-eldoc))
-    (use-package flycheck-irony
-      :after flycheck
-      :config
-      (flycheck-irony-setup))
-    (use-package company-irony)
-    (use-package company-irony-c-headers
-      :after company-irony))
-
-  (use-package rtags
-    :custom
-    (rtags-autostart-diagnostics t)
-    (rtags-use-bookmarks nil)
-    (rtags-completions-enabled nil)
-    ;; If not using ivy or helm to view results, use a pop-up window rather
-    ;; than displaying it in the current window...
-    (rtags-results-buffer-other-window t)
-    ;; ...and don't auto-jump to first match before making a selection.
-    (rtags-jump-to-first-match nil)
-    :bind ("C-M-i" . rtags-imenu)
-    :config
-    (use-package ivy-rtags
-      :after ivy
-      :custom
-      (rtags-display-result-backend 'ivy)))
-
-  (use-package clang-format
-    :config
-    (defun +clang-format-hook ()
-      (add-hook 'before-save-hook 'clang-format-buffer))
-    (add-hook 'c-mode '+clang-format-hook))
-
-  (use-package glsl-mode
-    :mode "\\.glsl$"
-    :mode "\\.vert$"
-    :mode "\\.frag$"
-    :mode "\\.geom$")
-
-  (use-package disaster :commands disaster)
-  (use-package make-mode))
 
 (use-package string-inflection
   :config
@@ -1681,80 +1752,15 @@ region-end is used."
         (join-line)
         (indent-according-to-mode)))
 
+    (defun newline-anywhere ()
+      "Add a newline from anywhere in the line."
+      (interactive)
+      (end-of-line)
+      (newline-and-indent))
+
+    (global-set-key (kbd "M-RET") 'newline-anywhere)
+
     (global-set-key (kbd "C-M-j") #'+join-line-indent)
     (global-set-key (kbd "C-w") 'kill-region-or-backward-word)
-    (global-set-key (kbd "C-c C-k") 'duplicate-current-line-or-region)
+    (global-set-key (kbd "C-c C-j") 'duplicate-current-line-or-region)
     (global-set-key (kbd "C-c C--") 'replace-next-underscore-with-camel)))
-
-(use-package kakoune
-  :disabled t
-  :straight (kakoune :host github :repo "jmorag/kakoune.el")
-  :demand t
-  ;; fd to escape insert mode is something I picked up from trying Spacemacs and can't shake
-  :chords ("fd" . ryo-enter)
-  ;; Having a non-chord way to escape is important, since key-chords don't work in macros
-  :bind ("C-z" . ryo-modal-mode)
-  :config
-  (require 'kakoune)
-  ;; Bar cursor in insert mode, block in normal mode
-  (setq-default cursor-type '(bar . 1))
-  (setq ryo-modal-cursor-type 'box)
-  ;; Start in normal mode when entering prog-mode buffers
-  (add-hook 'prog-mode-hook #'ryo-enter)
-  ;; This gets you spacemacs-esque SPC h help mnemonics
-  (define-key ryo-modal-mode-map (kbd "SPC h") 'help-command)
-  ;; Access all C-x bindings easily
-  (define-key ryo-modal-mode-map (kbd "z") ctl-x-map)
-  ;; I dislike the default kakoune behavior of ;
-  (ryo-modal-unset-key ";")
-  ;; Most of these aren't defaults since they're different from kakoune.
-  ;; The exception is C-u and C-d, which do scroll. They're not included by default since
-  ;; C-u is a very, very important emacs key, and binding it to scroll should be opt-in,
-  ;; not opt-out.
-  (ryo-modal-keys ("," save-buffer)
-                  ("P" yank-pop)
-                  ("m" mc/mark-next-like-this)
-                  ("M" mc/skip-to-next-like-this)
-                  ("n" mc/mark-previous-like-this)
-                  ("N" mc/skip-to-previous-like-this)
-                  ("*" mc/mark-all-like-this)
-                  ("C-v" set-rectangular-region-anchor)
-                  ("M-s" mc/split-region)
-                  (";" (("q" delete-window)
-                        ("v" split-window-horizontally)
-                        ("s" split-window-vertically)
-                        ("i" goto-init-file)))
-                  ("C-h" windmove-left)
-                  ("C-j" windmove-down)
-                  ("C-k" windmove-up)
-                  ("C-l" windmove-right)
-                  ("C-u" scroll-down-command :first '(deactivate-mark))
-                  ("C-d" scroll-up-command :first '(deactivate-mark)))
-
-  ;; This overrides the default mark-in-region with a prettier-looking one,
-  ;; and provides a couple extra commands
-  (use-package visual-regexp
-    :ryo
-    ("s" vr/mc-mark)
-    ("?" vr/replace)
-    ("M-/" vr/query-replace))
-
-  ;; Emacs incremental search doesn't work with multiple cursors, but this fixes that
-  (use-package phi-search
-    :bind (("C-s" . phi-search)
-           ("C-r" . phi-search-backward)))
-
-  ;; Probably the first thing you'd miss is undo and redo, which requires an extra package
-  ;; to work like it does in kakoune (and almost every other editor).
-  (use-package undo-tree
-    :config
-    (global-undo-tree-mode)
-    :ryo
-    ("u" undo-tree-undo)
-    ("U" undo-tree-redo)
-    ("SPC u" undo-tree-visualize)
-    :bind (:map undo-tree-visualizer-mode-map
-                ("h" . undo-tree-visualize-switch-branch-left)
-                ("j" . undo-tree-visualize-redo)
-                ("k" . undo-tree-visualize-undo)
-                ("l" . undo-tree-visualize-switch-branch-right))))
