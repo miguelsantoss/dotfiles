@@ -42,7 +42,6 @@
        #'with-no-warnings)
     (with-eval-after-load ',feature ,@forms)))
 
-(defvar indent-sensitive-modes '(coffee-mode))
 (defvar *is-mac* (eq system-type 'darwin))
 (defvar *is-linux* (eq system-type 'gnu/linux))
 
@@ -94,6 +93,10 @@
                    :branch "develop")
   :demand t)
 
+(use-package bind-key)
+
+;;;; Environment
+
 (use-package exec-path-from-shell
   :config
   (setq exec-path-from-shell-check-startup-files nil)
@@ -107,13 +110,25 @@
                 (cl-remove-duplicates exec-path :test #'string=))
               exec-path))))
 
-(use-package bind-key)
-
+;; If you have something on the system clipboard, and then kill
+;; something in Emacs, then by default whatever you had on the system
+;; clipboard is gone and there is no way to get it back. Setting the
+;; following option makes it so that when you kill something in Emacs,
+;; whatever was previously on the system clipboard is pushed into the
+;; kill ring. This way, you can paste it with `yank-pop'.
 (setq save-interprogram-paste-before-kill t)
 
+;; Slower scrolling on linux
 (when *is-linux*
   (setq mouse-wheel-scroll-amount '(1)))
 
+;;;; Candidate selection
+
+; Package `ivy' provides a user interface for choosing from a list of
+;; options by typing a query to narrow the list, and then selecting
+;; one of the remaining candidates. This offers a significant
+;; improvement over the default Emacs interface for candidate
+;; selection.
 (use-package ivy
   :init/el-patch
 
@@ -123,7 +138,8 @@
         'ivy-switch-buffer)
       (define-key map [remap switch-to-buffer-other-window]
         'ivy-switch-buffer-other-window)
-      map))
+      map)
+    "Keymap for `ivy-mode'.")
 
   (define-minor-mode ivy-mode
     (el-patch-concat
@@ -156,16 +172,22 @@ sets `completion-in-region-function' regardless of the value of
   (ivy-mode +1)
 
   :config
+
+  ;; With enough packages loaded, it is easy to get commands like
+  ;; `describe-symbol' to offer more than 30,000 candidates. Allow
+  ;; sorting in these cases.
   (setq ivy-sort-max-size 50000)
-  (setq ivy-count-format "(%d/%d) ")
-  (setq enable-recursive-minibuffers t)
-  (setq ivy-re-builders-alist '((t . ivy--regex-ignore-order)))
-  (setq ivy-use-virtual-buffers t)      ;; show bookmarks and recent files in buffer list
 
   :blackout t)
 
+;; Package `ivy-hydra' provides the C-o binding for Ivy menus which
+;; allows you to pick from a set of options for what to do with a
+;; selected candidate.
 (use-package ivy-hydra)
 
+;; Package `counsel' provides purpose-built replacements for many
+;; built-in Emacs commands that use enhanced configurations of `ivy'
+;; to provide extra features.
 (use-package counsel
   :init/el-patch
 
@@ -202,7 +224,7 @@ Remaps built-in functions to counsel replacements."
     :group 'ivy
     :type 'boolean)
 
-   (define-minor-mode counsel-mode
+  (define-minor-mode counsel-mode
     "Toggle Counsel mode on or off.
 Turn Counsel mode on if ARG is positive, off otherwise. Counsel
 mode remaps built-in emacs functions that have counsel
@@ -432,7 +454,6 @@ split."
 
   :blackout t)
 
-
 ;; Visually find and replace text
 (use-package visual-regexp
   :bind (("M-%" . vr/query-replace)))
@@ -456,6 +477,11 @@ split."
                        swiper-match-face-2
                        swiper-match-face-2)))
 
+(use-package deadgrep
+  :commands (deadgrep))
+
+(use-package wgrep)
+
 (use-package phi-search
   :disabled t
   :bind (("C-s" . phi-search)
@@ -468,8 +494,6 @@ split."
 (setq revert-without-query '(".*"))
 (global-auto-revert-mode +1)
 
-(use-package s)
-(use-package restart-emacs)
 ;; Package `smartparens' provides an API for manipulating paired
 ;; delimiters of many different types, as well as interactive commands
 ;; and keybindings for operating on paired delimiters at the
@@ -572,8 +596,94 @@ split."
 (use-feature abbrev
   :blackout t)
 
+(use-package yasnippet
+  :bind (:map yas-minor-mode-map
+
+              ;; Disable TAB from expanding snippets, as I don't use it and
+              ;; it's annoying.
+              ("TAB" . nil)
+              ("<tab>" . nil))
+  :config
+
+  ;; Reduce verbosity. The default value is 3. Bumping it down to 2
+  ;; eliminates a message about successful snippet lazy-loading setup
+  ;; on every(!) Emacs init. Errors should still be shown.
+  (setq yas-verbosity 2)
+
+  ;; Make it so that Company's keymap overrides Yasnippet's keymap
+  ;; when a snippet is active. This way, you can TAB to complete a
+  ;; suggestion for the current field in a snippet, and then TAB to
+  ;; move to the next field. Plus, C-g will dismiss the Company
+  ;; completions menu rather than cancelling the snippet and moving
+  ;; the cursor while leaving the completions menu on-screen in the
+  ;; same location.
+  (use-feature company
+    :config
+
+    ;; This function translates the "event types" I get from
+    ;; `map-keymap' into things that I can pass to `lookup-key' and
+    ;; `define-key'. It's a hack, and I'd like to find a built-in
+    ;; function that accomplishes the same thing while taking care of
+    ;; any edge cases I might have missed in this ad-hoc solution.
+    (defun +yasnippet-normalize-event (event)
+      "This function is a complete hack, do not use.
+But in principle, it translates what we get from `map-keymap'
+into what `lookup-key' and `define-key' want."
+      (if (vectorp event)
+          event
+        (vector event)))
+
+    ;; Here we define a hybrid keymap that delegates first to
+    ;; `company-active-map' and then to `yas-keymap'.
+    (defvar +yasnippet-then-company-keymap
+      ;; It starts out as a copy of `yas-keymap', and then we
+      ;; merge in all of the bindings from `company-active-map'.
+      (let ((keymap (copy-keymap yas-keymap)))
+        (map-keymap
+         (lambda (event company-cmd)
+           (let* ((event (+yasnippet-normalize-event event))
+                  (yas-cmd (lookup-key yas-keymap event)))
+             ;; Here we use an extended menu item with the
+             ;; `:filter' option, which allows us to dynamically
+             ;; decide which command we want to run when a key is
+             ;; pressed.
+             (define-key keymap event
+               `(menu-item
+                 nil ,company-cmd :filter
+                 (lambda (cmd)
+                   ;; There doesn't seem to be any obvious
+                   ;; function from Company to tell whether or not
+                   ;; a completion is in progress (à la
+                   ;; `company-explicit-action-p'), so I just
+                   ;; check whether or not `company-my-keymap' is
+                   ;; defined, which seems to be good enough.
+                   (if company-my-keymap
+                       ',company-cmd
+                     ',yas-cmd))))))
+         company-active-map)
+        keymap)
+      "Keymap which delegates to both `company-active-map' and `yas-keymap'.
+The bindings in `company-active-map' only apply if Company is
+currently active.")
+
+    (radian-defadvice radian--advice-company-overrides-yasnippet
+        (yas--make-control-overlay &rest args)
+      :around yas--make-control-overlay
+      "Allow `company' keybindings to override those of `yasnippet'."
+      ;; The function `yas--make-control-overlay' uses the current
+      ;; value of `yas-keymap' to build the Yasnippet overlay, so to
+      ;; override the Yasnippet keymap we only need to dynamically
+      ;; rebind `yas-keymap' for the duration of that function.
+      (let ((yas-keymap +yasnippet-then-company-keymap))
+        (apply yas--make-control-overlay args))))
+
+  :blackout yas-minor-mode)
+
+;;;; Indentation
+
 ;; Never use tabs, use spaces instead.
 (setq-default indent-tabs-mode nil)
+
 (setq tab-width 2)
 (setq js-indent-level 2)
 (setq css-indent-offset 2)
@@ -582,6 +692,80 @@ split."
 (setq-default c-basic-offset 2)
 (setq-default tab-width 2)
 (setq-default c-basic-indent 2)
+
+(defun +indent-defun ()
+  "Indent the surrounding defun."
+  (interactive)
+  (save-excursion
+    (when (beginning-of-defun)
+      (let ((beginning (point)))
+        (end-of-defun)
+        (let ((end (point)))
+          (let ((inhibit-message t)
+                (message-log-max nil))
+            (indent-region beginning end)))))))
+
+(bind-key* "C-M-q" #'+indent-defun)
+
+
+;;;; Autocompletion
+
+;;; Definition location
+
+;; Package `dumb-jump' provides a mechanism to jump to the definitions
+;; of functions, variables, etc. in a variety of programming
+;; languages. The advantage of `dumb-jump' is that it doesn't try to
+;; be clever, so it "just works" instantly for dozens of languages
+;; with zero configuration.
+(use-package dumb-jump
+  :init
+
+  (dumb-jump-mode +1)
+
+  :bind (:map dumb-jump-mode-map
+              ("M-Q" . dumb-jump-quick-look))
+  :bind* (("C-M-d" . dumb-jump-go-prompt)
+          ([remap evil-jump-to-tag] . dumb-jump-go))
+          ("C-x 4 g" . dumb-jump-go-other-window)
+          ("C-x 4 d" . +dumb-jump-go-prompt-other-window))
+  :config
+
+  (defun +dumb-jump-go-prompt-other-window ()
+    "Like `dumb-jump-go-prompt' but use a different window."
+    (interactive)
+    (let ((dumb-jump-window 'other))
+      (dumb-jump-go-prompt))))
+
+(use-package flycheck
+  :defer 4
+  :bind-keymap (("C-c !" . flycheck-command-map))
+  :config
+
+  (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
+
+  ;; (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.7/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
+
+  (global-flycheck-mode +1)
+
+  ;; Run a syntax check when changing buffers, just in case you
+  ;; modified some other files that impact the current one. See
+  ;; https://github.com/flycheck/flycheck/pull/1308.
+  (add-to-list 'flycheck-check-syntax-automatically 'idle-buffer-switch)
+
+  ;; (setq flycheck-indication-mode 'left-fringe)
+  ;; ;; A non-descript, left-pointing arrow
+  ;; (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
+  ;;   [16 48 112 240 112 48 16] nil nil 'center)
+
+  ;; For the above functionality, check syntax in a buffer that you
+  ;; switched to only briefly. This allows "refreshing" the syntax
+  ;; check state for several buffers quickly after e.g. changing a
+  ;; config file.
+  (setq flycheck-buffer-switch-check-intermediate-buffers t)
+
+  ;; Display errors in the echo area after only 0.2 seconds, not 0.9.
+  (setq flycheck-display-errors-delay 0.2)
+  :blackout t)
 
 ;; Store custom-file separately, don't freak out when it's not found
 (setq custom-file "~/.emacs.d/custom.el")
@@ -606,7 +790,6 @@ split."
 ;; Control is control, and you also need to change Caps Lock to Control in the Keyboard
 ;; preferences in macOS.
 
-(setq initial-scratch-message nil)
 ;; =============
 ;; SANE DEFAULTS
 
@@ -638,14 +821,16 @@ split."
 ;; Move file to trash instead of removing.
 (setq-default delete-by-moving-to-trash t)
 
-(setq
- inhibit-startup-message t         ; Don't show the startup message...
- inhibit-startup-screen t          ; ... or screen
- cursor-in-non-selected-windows t  ; Hide the cursor in inactive windows
+(setq initial-scratch-message nil)
+(setq inhibit-startup-message t)
+(setq inhibit-startup-screen t)
 
- echo-keystrokes 0.1               ; Show keystrokes right away, don't show the message in the scratch buffer
- help-window-select t              ; Select help window so it's easy to quit it with 'q'
-)
+(setq cursor-in-non-selected-windows t)
+
+(setq echo-keystrokes 1e-6)
+
+; Select help window so it's easy to quit it with 'q'
+;; (setq  help-window-select t)
 
 ;; never kill *scratch* buffer
 (add-hook 'kill-buffer-query-functions
@@ -657,24 +842,26 @@ split."
 (size-indication-mode t)
 
 (defalias 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
-(delete-selection-mode 1)          ; Delete selected text when typing
 (global-unset-key (kbd "s-p"))     ; Don't print
+
+;; Feature `delsel' provides an alternative behavior for certain
+;; actions when you have a selection active. Namely: if you start
+;; typing when you have something selected, then the selection will be
+;; deleted; and if you press DEL while you have something selected, it
+;; will be deleted rather than killed. (Otherwise, in both cases the
+;; selection is deselected and the normal function of the key is
+;; performed.)
+(use-feature delsel
+  :demand t
+  :config
+
+  (delete-selection-mode +1))
 
 (setq ring-bell-function 'ignore)
 
 ;; Delete trailing spaces and add new line in the end of a file on save.
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
 (setq require-final-newline t)
-
-;; Linear undo and redo.
-(use-package undo-tree
-  :init
-  (progn
-    (global-undo-tree-mode)
-    (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/tmp/undo"))
-          undo-tree-auto-save-history t
-          undo-tree-visualizer-timestamps t
-          undo-tree-visualizer-diff t)))
 
 (recentf-mode +1)
 
@@ -708,7 +895,6 @@ split."
   (+disable-themes))
 
 ;; (use-package zenburn-theme)
-;; (use-package dracula-theme)
 ;; (use-package solarized-theme)
 
 (load-theme 'tsdh-light t)
@@ -735,11 +921,12 @@ split."
 ;; Highlight current line
 ;; (global-hl-line-mode 1)
 
-;; Hide minor modes from modeline
-(use-package rich-minority
-  :config
-  (setf rm-blacklist "")
-  (rich-minority-mode t))
+;; ;; Hide minor modes from modeline
+;; (use-package rich-minority
+;;   :demand t
+;;   :config
+;;   (setf rm-blacklist "")
+;;   (rich-minority-mode t))
 
 ;; Display dir if two files have the same name
 (use-feature uniquify
@@ -951,7 +1138,6 @@ point reaches the beginning or end of the buffer, stop there."
 
   (use-feature dired-x)
 
-
   (setq dired-dwim-target t)
   (--each '(dired-do-rename
             dired-do-copy
@@ -976,29 +1162,6 @@ point reaches the beginning or end of the buffer, stop there."
        (define-key wdired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
        (define-key wdired-mode-map (vector 'remap 'beginning-of-buffer) 'dired-back-to-top)
        (define-key wdired-mode-map (vector 'remap 'end-of-buffer) 'dired-jump-to-bottom))))
-
-(use-package deadgrep
-  :defer t
-  :commands (deadgrep))
-
-;; ==========================================
-;; MENUS AND COMPLETION (not code completion)
-
-
-;; Use minimalist Ivy for most things.
-
-(use-package smex
-  :config
-  (smex-initialize))
-
-(use-package prescient
-  :config (prescient-persist-mode t))
-
-(use-package ivy-prescient
-  :after ivy
-  :config (ivy-prescient-mode t))
-
-(use-package flx)
 
 (use-package avy
   :bind (("C-c C-SPC" . avy-goto-char)))
@@ -1083,70 +1246,169 @@ point reaches the beginning or end of the buffer, stop there."
 
 ;; Show changes in the gutter
 (use-package git-gutter-fringe
-  :config
-  (global-git-gutter-mode 't)
-  (setq-default fringes-outside-margins t)
-  (define-fringe-bitmap 'git-gutter-fr:added [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:modified [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
-    nil nil 'bottom)
+  :defer 2
 
-  (set-face-background 'git-gutter:modified 'nil)   ;; background color
-  (set-face-foreground 'git-gutter:added "green4")
-  (set-face-foreground 'git-gutter:deleted "red"))
+  :config
+
+  (global-git-gutter-mode +1)
+
+  (setq-default fringes-outside-margins t)
+
+  ;; (define-fringe-bitmap 'git-gutter-fr:added [224]
+  ;;   nil nil '(center repeated))
+  ;; (define-fringe-bitmap 'git-gutter-fr:modified [224]
+  ;;   nil nil '(center repeated))
+  ;; (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
+  ;;   nil nil 'bottom)
+
+  ;; (set-face-background 'git-gutter:modified 'nil)   ;; background color
+  ;; (set-face-foreground 'git-gutter:added "green4")
+  ;; (set-face-foreground 'git-gutter:deleted "red")
+
+:blackout git-gutter-mode)
+
+;; Package `git-link' provides a simple function M-x git-link which
+;; copies to the kill ring a link to the current line of code or
+;; selection on GitHub, GitLab, etc.
+(use-package git-link
+  :config
+
+  ;; Link to a particular revision of a file rather than using the
+  ;; branch name in the URL.
+  (setq git-link-use-commit t))
 
 ;; ===============
 ;; CODE COMPLETION
 
+;; Package `company' provides an in-buffer autocompletion framework.
+;; It allows for packages to define backends that supply completion
+;; candidates, as well as optional documentation and source code. Then
+;; Company allows for multiple frontends to display the candidates,
+;; such as a tooltip menu. Company stands for "Complete Anything".
 (use-package company
   :defer 3
-  :custom
-  (company-idle-delay 0.2)
-  (company-global-modes '(not org-mode))
-  (company-minimum-prefix-length 2)
-  (company-tooltip-align-annotations t)
-  (company-tooltip-limit 20)
-  (company-echo-delay 0)
-  (company-tooltip-flip-when-above t)
-  (company-require-match nil)
-  (company-minimum-prefix-length 2)
-  (company-show-numbers t)
-  (company-occurrence-weight-function #'company-occurrence-prefer-any-closest)
-  (company-transformers '(company-sort-prefer-same-case-prefix))
-  (company-dabbrev-minimum-length 2)
-  (company-dabbrev-code-modes t)
-  (company-dabbrev-code-everywhere t)
-  :bind
-  ([remap completion-at-point] . company-manual-begin)
-  ([remap complete-symbol] . company-manual-begin)
   :init
-  (global-company-mode t)
-  (setq company-continue-commands
-        (append company-continue-commands
-                '(comint-previous-matching-input-from-input
-                  comint-next-matching-input-from-input))))
 
-(use-package company-flx
-  :disabled t
-  :after company
+  (defvar +company-backends-global
+    '(company-capf
+      company-files
+      (company-dabbrev-code company-keywords)
+      company-dabbrev)
+    "Values for `company-backends' used everywhere.
+If `company-backends' is overridden by Radian, then these
+backends will still be included.")
+
+  :bind (;; Remap the standard Emacs keybindings for invoking
+         ;; completion to instead use Company. You might think this
+         ;; could be put in the `:bind*' declaration below, but it
+         ;; seems that `bind-key*' does not work with remappings.
+         ([remap completion-at-point] . company-manual-begin)
+         ([remap complete-symbol] . company-manual-begin)
+
+         ;; The following are keybindings that take effect whenever
+         ;; the completions menu is visible, even if the user has not
+         ;; explicitly interacted with Company.
+
+         :map company-active-map
+
+         ;; Make TAB always complete the current selection, instead of
+         ;; only completing a common prefix.
+         ("<tab>" . company-complete-selection)
+         ("TAB" . company-complete-selection)
+
+         ;; The following are keybindings that only take effect if the
+         ;; user has explicitly interacted with Company. Note that
+         ;; `:map' from above is "sticky", and applies also below: see
+         ;; https://github.com/jwiegley/use-package/issues/334#issuecomment-349473819.
+
+         :filter (company-explicit-action-p)
+
+         ;; Make RET trigger a completion if and only if the user has
+         ;; explicitly interacted with Company, instead of always
+         ;; doing so.
+         ("<return>" . company-complete-selection)
+         ("RET" . company-complete-selection)
+
+         ;; We then make <up> and <down> abort the completions menu
+         ;; unless the user has interacted explicitly. Note that we
+         ;; use `company-select-previous' instead of
+         ;; `company-select-previous-or-abort'. I think the former
+         ;; makes more sense since the general idea of this `company'
+         ;; configuration is to decide whether or not to steal
+         ;; keypresses based on whether the user has explicitly
+         ;; interacted with `company', not based on the number of
+         ;; candidates.
+         ;;
+         ;; Note that M-p and M-n work regardless of whether explicit
+         ;; interaction has happened yet, and note also that M-TAB
+         ;; when the completions menu is open counts as an
+         ;; interaction.
+         ("<up>" . company-select-previous)
+         ("<down>" . company-select-next))
+
+  :bind* (;; The default keybinding for `completion-at-point' and
+          ;; `complete-symbol' is M-TAB or equivalently C-M-i. We
+          ;; already remapped those bindings to `company-manual-begin'
+          ;; above. Here we make sure that they definitely invoke
+          ;; `company-manual-begin' even if a minor mode binds M-TAB
+          ;; directly.
+          ("M-TAB" . company-manual-begin))
+
   :config
-  (company-flx-mode t)
-  (setq company-flx-limit 100))
 
-(use-package company-posframe
-  :after company
-  :config (company-posframe-mode t))
+  ;; Always display the entire suggestion list onscreen, placing it
+  ;; above the cursor if necessary.
+  (setq company-tooltip-minimum company-tooltip-limit)
 
-(use-package company-quickhelp
-  :after company
-  :config
-  (define-key company-active-map (kbd "C-c h") #'company-quickhelp-manual-begin)
-  (company-quickhelp-mode t))
+  ;; Always display suggestions in the tooltip, even if there is only
+  ;; one. Also, don't display metadata in the echo area. (This
+  ;; conflicts with ElDoc.)
+  (setq company-frontends '(company-pseudo-tooltip-frontend))
 
+  ;; Show quick-reference numbers in the tooltip. (Select a completion
+  ;; with M-1 through M-0.)
+  (setq company-show-numbers t)
+
+  ;; Prevent non-matching input (which will dismiss the completions
+  ;; menu), but only if the user interacts explicitly with Company.
+  (setq company-require-match #'company-explicit-action-p)
+
+  ;; Company appears to override our settings in `company-active-map'
+  ;; based on `company-auto-complete-chars'. Turning it off ensures we
+  ;; have full control.
+  (setq company-auto-complete-chars nil)
+
+  ;; Only search the current buffer to get suggestions for
+  ;; `company-dabbrev' (a backend that creates suggestions from text
+  ;; found in your buffers). This prevents Company from causing lag
+  ;; once you have a lot of buffers open.
+  (setq company-dabbrev-other-buffers nil)
+
+  ;; Make the `company-dabbrev' backend fully case-sensitive, to
+  ;; improve the UX when working with domain-specific words that have
+  ;; particular casing.
+  (setq company-dabbrev-ignore-case nil)
+  (setq company-dabbrev-downcase nil)
+
+  ;; When candidates in the autocompletion tooltip have additional
+  ;; metadata, like a type signature, align that information to the
+  ;; right-hand side. This usually makes it look neater.
+  (setq company-tooltip-align-annotations t)
+
+  (global-company-mode +1)
+
+  :blackout t)
+
+
+;; Package `company-prescient' provides intelligent sorting and
+;; filtering for candidates in Company completions.
 (use-package company-prescient
-  :config (company-prescient-mode t))
+  :demand t
+  :after company
+  :config
+
+  ;; Use `prescient' for Company menus.
+  (company-prescient-mode +1))
 
 (defvar he-search-loc-backward (make-marker))
 (defvar he-search-loc-forward (make-marker))
@@ -1289,7 +1551,7 @@ string).  It returns t if a new completion is found, nil otherwise."
     (if (not expansion)
         (progn
           (if old (he-reset-string))
-          ())
+
       (progn
         (he-substitute-string expansion t)
         t))))
@@ -1467,30 +1729,6 @@ string).  It returns t if a new completion is found, nil otherwise."
     :config
     (global-evil-surround-mode 1)))
 
-(use-package wgrep)
-
-(use-package yasnippet
-  :config
-  (yas-global-mode 1)
-  (use-package yasnippet-snippets)
-  (global-set-key (kbd "C-c s") 'company-yasnippet))
-
-(use-package flycheck
-  :config
-  (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
-  ;; (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.7/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
-  (global-flycheck-mode 1)
-  (setq flycheck-indication-mode 'left-fringe)
-  ;; A non-descript, left-pointing arrow
-  (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
-    [16 48 112 240 112 48 16] nil nil 'center)
-  (use-package flycheck-posframe
-    :config
-    (flycheck-posframe-mode 1)))
-
-(use-package dumb-jump
-  :bind* (("C-M-d" . dumb-jump-quick-look)
-          ([remap evil-jump-to-tag] . dumb-jump-go)))
 
 (use-package lsp-mode
   :config
@@ -1546,9 +1784,6 @@ string).  It returns t if a new completion is found, nil otherwise."
         (setq-local flycheck-javascript-eslint-executable eslint))))
 
   (add-hook 'flycheck-mode-hook #'+use-eslint-from-node-modules))
-
-(use-package nodejs-repl
-  :defer t)
 
 (use-package rjsx-mode
   :after js2-mode)
@@ -1690,7 +1925,7 @@ Name is relative to the project root.")
   "Copy buffer's full path."
   (interactive)
   (when buffer-file-name
-    (kill-new (file-truename buffer-file-name))))
+    (kill-new (git-file-path (file-truename buffer-file-name)))))
 
 (defun kill-other-buffers ()
   "Kill all other buffers."
