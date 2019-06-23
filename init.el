@@ -42,8 +42,71 @@
        #'with-no-warnings)
     (with-eval-after-load ',feature ,@forms)))
 
-(defvar *is-mac* (eq system-type 'darwin))
-(defvar *is-linux* (eq system-type 'gnu/linux))
+(defmacro radian-protect-macros (&rest body)
+  "Eval BODY, protecting macros from incorrect expansion.
+This macro should be used in the following situation:
+
+Some form is being evaluated, and this form contains as a
+sub-form some code that will not be evaluated immediately, but
+will be evaluated later. The code uses a macro that is not
+defined at the time the top-level form is evaluated, but will be
+defined by time the sub-form's code is evaluated. This macro
+handles its arguments in some way other than evaluating them
+directly. And finally, one of the arguments of this macro could
+be interpreted itself as a macro invocation, and expanding the
+invocation would break the evaluation of the outer macro.
+
+You might think this situation is such an edge case that it would
+never happen, but you'd be wrong, unfortunately. In such a
+situation, you must wrap at least the outer macro in this form,
+but can wrap at any higher level up to the top-level form."
+  (declare (indent 0))
+  `(eval '(progn ,@body)))
+
+(defmacro radian-defadvice (name arglist where place docstring &rest body)
+  "Define an advice called NAME and add it to a function.
+ARGLIST is as in `defun'. WHERE is a keyword as passed to
+`advice-add', and PLACE is the function to which to add the
+advice, like in `advice-add'. DOCSTRING and BODY are as in
+`defun'."
+  (declare (indent 2)
+           (doc-string 5))
+  (unless (stringp docstring)
+    (error "radian-defadvice: no docstring provided"))
+  `(progn
+     (defun ,name ,arglist
+       ,(let ((article (if (string-match-p "^:[aeiou]" (symbol-name where))
+                           "an"
+                         "a")))
+          (format "%s\n\nThis is %s `%S' advice for `%S'."
+                  docstring article where
+                  (if (and (listp place)
+                           (memq (car place) ''function))
+                      (cadr place)
+                    place)))
+       ,@body)
+     (advice-add ',place ',where #',name)
+     ',name))
+
+(defmacro radian-defhook (name arglist hook docstring &rest body)
+  "Define a function called NAME and add it to a hook.
+ARGLIST is as in `defun'. HOOK is the hook to which to add the
+function. DOCSTRING and BODY are as in `defun'."
+  (declare (indent 2)
+           (doc-string 4))
+  (unless (string-match-p "-hook$" (symbol-name hook))
+    (error "Symbol `%S' is not a hook" hook))
+  (unless (stringp docstring)
+    (error "radian-defhook: no docstring provided"))
+  `(progn
+     (defun ,name ,arglist
+       ,(format "%s\n\nThis function is for use in `%S'."
+                docstring hook)
+       ,@body)
+     (add-hook ',hook ',name)))
+
+(setq is-mac (eq system-type 'darwin))
+(setq is-linux (eq system-type 'gnu/linux))
 
 (setq straight-repository-branch "develop")
 (setq straight-recipe-overrides nil)
@@ -102,7 +165,7 @@
   (setq exec-path-from-shell-check-startup-files nil)
 
   :init
-  (when *is-mac*
+  (when is-mac
     (setq exec-path
           (or (eval-when-compile
                 (require 'cl-lib)
@@ -117,10 +180,6 @@
 ;; whatever was previously on the system clipboard is pushed into the
 ;; kill ring. This way, you can paste it with `yank-pop'.
 (setq save-interprogram-paste-before-kill t)
-
-;; Slower scrolling on linux
-(when *is-linux*
-  (setq mouse-wheel-scroll-amount '(1)))
 
 ;;;; Candidate selection
 
@@ -361,7 +420,10 @@ split."
   :demand t
   :config
 
-(winner-mode +1))
+  (winner-mode +1))
+
+(use-package ace-window
+  :bind (("C-x o" . ace-window)))
 
 ;; Package `transpose-frame' provides simple commands to mirror,
 ;; rotate, and transpose Emacs windows: `flip-frame', `flop-frame',
@@ -385,9 +447,8 @@ split."
   :config
   (setq projectile-switch-project-action #'projectile-dired)
   ;; (setq projectile-enable-caching t)
+  (setq projectile-completion-system 'ivy)
 
-
-  (define)
   (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
   (global-set-key (kbd "C-x p s s") 'counsel-projectile-ag)
 
@@ -447,7 +508,7 @@ split."
   :blackout t)
 
 (use-feature subword
-  :demant t
+  :demand t
   :config
 
   (global-subword-mode +1)
@@ -476,6 +537,9 @@ split."
                        swiper-match-face-2
                        swiper-match-face-2
                        swiper-match-face-2)))
+
+(use-package avy
+  :bind (("C-c C-SPC" . avy-goto-char)))
 
 (use-package deadgrep
   :commands (deadgrep))
@@ -725,7 +789,7 @@ currently active.")
   :bind (:map dumb-jump-mode-map
               ("M-Q" . dumb-jump-quick-look))
   :bind* (("C-M-d" . dumb-jump-go-prompt)
-          ([remap evil-jump-to-tag] . dumb-jump-go))
+          ([remap evil-jump-to-tag] . dumb-jump-go)
           ("C-x 4 g" . dumb-jump-go-other-window)
           ("C-x 4 d" . +dumb-jump-go-prompt-other-window))
   :config
@@ -735,6 +799,15 @@ currently active.")
     (interactive)
     (let ((dumb-jump-window 'other))
       (dumb-jump-go-prompt))))
+
+(use-feature eldoc
+  :demand t
+
+  :config
+
+  (setq eldoc-echo-area-use-multiline-p nil)
+
+  :blackout t)
 
 (use-package flycheck
   :defer 4
@@ -795,17 +868,18 @@ currently active.")
 
 (setq default-directory "~/" )
 
-;; Smoother and nicer scrolling
-(setq scroll-margin 0
-      scroll-step 0
-      next-line-add-newlines nil
-      scroll-conservatively 100000
-      scroll-preserve-screen-position 1)
+;; Smooth scrolling
+(setq scroll-margin 1)
+(setq scroll-up-aggressively 0.01)
+(setq scroll-down-aggressively 0.01)
+(setq scroll-step 1)
+(setq scroll-conservatively 10000)
 
-(setq mouse-wheel-follow-mouse 't)
-(setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
+;; Slower scrolling on linux
+(when is-linux
+  (setq mouse-wheel-scroll-amount '(1)))
 
-(when *is-linux*
+(when is-linux
   (setq x-select-enable-primary nil
         x-select-enable-clipboard t
         interprogram-paste-function 'x-cut-buffer-or-selection-value))
@@ -831,6 +905,8 @@ currently active.")
 
 ; Select help window so it's easy to quit it with 'q'
 ;; (setq  help-window-select t)
+
+(setq fill-column 80)
 
 ;; never kill *scratch* buffer
 (add-hook 'kill-buffer-query-functions
@@ -863,19 +939,24 @@ currently active.")
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
 (setq require-final-newline t)
 
-(recentf-mode +1)
+(use-feature recentf
+  :demand t
 
-(global-set-key (kbd "C-c C-c") 'comment-dwim)
+  :config
+  (recentf-mode +1)
+  (setq recentf-max-saved-items 100)
+
+  :blackout t)
 
 ;; =======
 ;; VISUALS
 
 ;; Enable transparent title bar on macOS
-(when *is-mac*
+(when is-mac
   (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
   (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
 
-(set-frame-font "Monaco-12" nil)
+(set-frame-font "mononoki-14" nil)
 
 ;; Nice and simple default light theme.
 (setq custom-theme-directory (concat user-emacs-directory "themes"))
@@ -899,90 +980,43 @@ currently active.")
 
 (load-theme 'tsdh-light t)
 
-;; Pretty icons
-(use-package all-the-icons)
-;; MUST DO M-x all-the-icons-install-fonts after
-
 ;; Hide toolbar and scroll bar
 (tool-bar-mode -1)
 (scroll-bar-mode -1)
-(when *is-linux* (menu-bar-mode -1))
+(when is-linux (menu-bar-mode -1))
 
 ;; Disable blinking cursor.
-(blink-cursor-mode 0)
+(blink-cursor-mode +1)
 
 ;; Always wrap lines
-(global-visual-line-mode t)
+(global-visual-line-mode +1)
 
 ;; Show line numbers
-(global-display-line-numbers-mode t)
+(global-display-line-numbers-mode +1)
 (define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
 
 ;; Highlight current line
-;; (global-hl-line-mode 1)
-
-;; ;; Hide minor modes from modeline
-;; (use-package rich-minority
-;;   :demand t
-;;   :config
-;;   (setf rm-blacklist "")
-;;   (rich-minority-mode t))
+(global-hl-line-mode +1)
 
 ;; Display dir if two files have the same name
 (use-feature uniquify
   :init
+
   (progn
     (setq uniquify-buffer-name-style 'reverse
           uniquify-separator "|"
           uniquify-after-kill-buffer-p t
-          uniquify-ignore-buffers-re "^\\*")))
+          uniquify-ignore-buffers-re "^\\*"))
+
+  :blackout t)
 
 ;; Show full path in the title bar.
 ;; (setq-default frame-title-format "%b (%f)")
 (setq-default frame-title-format "")
 (setq ns-use-proxy-icon nil)
 
-;; Show keybindings cheatsheet
-;; (use-package which-key
-;;   :config
-;;   (which-key-mode)
-;;   (setq which-key-idle-delay 0.5))
-
-(use-package restart-emacs)
-
 ;; ================
 ;; BASIC NAVIGATION
-
-;; Kill line with CMD-Backspace. Note that thanks to Simpleclip, killing doesn't rewrite the system clipboard.
-;; Kill one word with Alt+Backspace.
-;; Kill forward word with Alt-Shift-Backspace.
-(global-set-key (kbd "s-<backspace>") 'kill-whole-line)
-(global-set-key (kbd "M-S-<backspace>") 'kill-word)
-
-(defun smarter-move-beginning-of-line (arg)
-  "Move point back to indentation of beginning of line.
-
-Move point to the first non-whitespace character on this line.
-If point is already there, move to the beginning of the line.
-Effectively toggle between the first non-whitespace character and
-the beginning of the line.
-
-If ARG is not nil or 1, move forward ARG - 1 lines first.  If
-point reaches the beginning or end of the buffer, stop there."
-  (interactive "^p")
-  (setq arg (or arg 1))
-
-  ;; Move lines first
-  (when (/= arg 1)
-    (let ((line-move-visual nil))
-      (forward-line (1- arg))))
-
-  (let ((orig-point (point)))
-    (back-to-indentation)
-    (when (= orig-point (point))
-      (move-beginning-of-line 1))))
-
-(global-set-key (kbd "C-a") 'smarter-move-beginning-of-line)
 
 ;; Many commands in Emacs write the current position into mark ring.
 ;; These custom functions allow for quick movement backward and forward.
@@ -1030,12 +1064,10 @@ point reaches the beginning or end of the buffer, stop there."
   :bind (("M-i" . #'change-inner)
          ("M-o" . #'change-outer)))
 
-;; Move-text lines around with meta-up/down.
-(use-package move-text
-  :config
-  (move-text-default-bindings))
+(defvar indent-sensitive-modes '())
 
 (use-package smart-newline
+  :demand t
   :bind
   ("<s-return>" . eol-then-smart-newline)
   :hook
@@ -1052,81 +1084,12 @@ point reaches the beginning or end of the buffer, stop there."
     (move-end-of-line nil)
     (smart-newline)))
 
-;; Quickly insert new lines above or below the current line, with correct indentation.
-(defun smart-open-line ()
-  "Insert an empty line after the current line. Position the cursor at its beginning, according to the current mode."
-  (interactive)
-  (move-end-of-line nil)
-  (newline-and-indent))
-
-(defun smart-open-line-above ()
-  "Insert an empty line above the current line. Position the cursor at it's beginning, according to the current mode."
-  (interactive)
-  (move-beginning-of-line nil)
-  (newline-and-indent)
-  (forward-line -1)
-  (indent-according-to-mode))
-
-(global-set-key (kbd "s-<return>") 'smart-open-line)            ;; Cmd+Return new line below
-(global-set-key (kbd "s-S-<return>") 'smart-open-line-above)    ;; Cmd+Shift+Return new line above
-
 (use-package multiple-cursors
   :bind (("s-d" . mc/mark-next-like-this)
          ("s-D" . mc/mark-previous-like-this)
          ("C-c s-d" . mc/mark-all-like-this-dwim))
   :config
-  (multiple-cursors-mode 1))
-
-(use-package evil-mc
-  :config
-  (global-evil-mc-mode 1))
-
-(use-package volatile-highlights
-  :config
-  (vhl/define-extension 'my-evil-highlights
-                        'evil-yank
-                        'evil-paste-after
-                        'evil-paste-before
-                        'evil-move)
-
-  (vhl/install-extension 'my-evil-highlights)
-
-  (vhl/define-extension 'my-undo-tree-highlights
-                        'undo-tree-undo
-                        'undo-tree-redo)
-
-  (vhl/install-extension 'my-undo-tree-highlights)
-
-  (volatile-highlights-mode +1))
-
-;; =================
-;; WINDOW MANAGEMENT
-
-
-;; This is rather radical, but saves from a lot of pain in the ass.
-;; When split is automatic, always split windows vertically
-(setq split-height-threshold 0)
-(setq split-width-threshold nil)
-
-
-;; Go to other windows easily with one keystroke Cmd-something.
-(global-set-key (kbd "s-1") (kbd "C-x 1"))  ;; Cmd-1 kill other windows (keep 1)
-(global-set-key (kbd "s-2") (kbd "C-x 2"))  ;; Cmd-2 split horizontally
-(global-set-key (kbd "s-3") (kbd "C-x 3"))  ;; Cmd-3 split vertically
-(global-set-key (kbd "s-0") (kbd "C-x 0"))  ;; Cmd-0...
-(global-set-key (kbd "s-w") (kbd "C-x 0"))  ;; ...and Cmd-w to close current window
-
-
-;; Move between windows with Control-Command-Arrow and with =Cmd= just like in iTerm.
-(use-feature windmove
-  :bind (("S-<left>" . windmove-left)
-         ("S-<right>" . windmove-right)
-         ("S-<up>" . windmove-up)
-         ("S-<down>" . windmove-down)))
-
-(use-feature winner
-  :config
-  (winner-mode 1))
+  (multiple-cursors-mode +1))
 
 ;; ==================
 ;; PROJECT MANAGEMENT
@@ -1152,6 +1115,9 @@ point reaches the beginning or end of the buffer, stop there."
   (define-key dired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
   (define-key dired-mode-map (kbd "k") 'dired-do-delete)
 
+  (define-key global-map (kbd "C-x C-j") 'dired-jump)
+  (define-key global-map [remap dired] 'dired-jump)
+
   (put 'dired-find-alternate-file 'disabled nil)
 
   ;; Delete with C-x C-k to match file buffers and magit
@@ -1162,120 +1128,6 @@ point reaches the beginning or end of the buffer, stop there."
        (define-key wdired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
        (define-key wdired-mode-map (vector 'remap 'beginning-of-buffer) 'dired-back-to-top)
        (define-key wdired-mode-map (vector 'remap 'end-of-buffer) 'dired-jump-to-bottom))))
-
-(use-package avy
-  :bind (("C-c C-SPC" . avy-goto-char)))
-
-(use-package ace-window
-  :bind (("C-x o" . ace-window)))
-
-;; ========================
-;; VERSION CONTROL WITH GIT
-
-
-;; Magit
-(use-package magit
-  :bind (("C-x g" . magit-status)
-         ("C-x C-b" . magit-blame-addition))
-  :config
-  (setq magit-diff-refine-hunk 'all)
-  (setq magit-log-auto-more t)
-  (setq magit-completing-read-function 'ivy-completing-read)
-
-  (set-default 'magit-push-always-verify nil)
-  (set-default 'magit-revert-buffers 'silent)
-  (set-default 'magit-no-confirm '(stage-all-changes
-                                   unstage-all-changes))
-
-  (defun +magit-display-buffer (buffer)
-    "Like `magit-display-buffer-fullframe-status-v1' with two differences:
-
-1. Magit sub-buffers that aren't spawned from a status screen are opened as
-   popups.
-2. The status screen isn't buried when viewing diffs or logs from the status
-   screen.
-
-   Taken from doom-emacs
-   "
-    (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
-      (display-buffer
-       buffer (cond
-               ;; If opened from an eshell window or popup, use the same window.
-               ((or (derived-mode-p 'eshell-mode)
-                    (eq (window-dedicated-p) 'side))
-                '(display-buffer-same-window))
-               ;; Open target buffers below the current one (we want previous
-               ;; magit windows to be visible; especially magit-status).
-               ((or (bound-and-true-p git-commit-mode)
-                    (derived-mode-p 'magit-mode))
-                (let ((size (if (eq buffer-mode 'magit-process-mode)
-                                0.35
-                              0.7)))
-                  `(display-buffer-below-selected
-                    . ((window-height . ,(truncate (* (window-height) size)))))))
-               ;; log/stash/process buffers, unless opened from a magit-status
-               ;; window, should be opened in popups.
-               ((memq buffer-mode '(magit-process-mode
-                                    magit-log-mode
-                                    magit-stash-mode))
-                '(display-buffer-below-selected))
-               ;; Last resort: use current window
-               ('(display-buffer-same-window))))))
-
-  ;; (defun +magit-display-popup-buffer (buffer &optional alist)
-  ;;   "TODO"
-  ;;   (cond ((eq (window-dedicated-p) 'side)
-  ;;          (if (fboundp '+popup-display-buffer-stacked-side-window)
-  ;;              (+popup-display-buffer-stacked-side-window buffer alist)
-  ;;            (display-buffer-in-side-window buffer alist)))
-  ;;         ((derived-mode-p 'magit-mode)
-  ;;          (display-buffer-below-selected buffer alist))
-  ;;         ((display-buffer-in-side-window buffer alist))))
-
-  (setq magit-display-buffer-function #'+magit-display-buffer)
-  ;; (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
-
-  (defun enforce-git-commit-conventions ()
-    "See https://chris.beams.io/posts/git-commit/"
-    (setq fill-column 72
-          git-commit-summary-max-length 50
-          git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
-  (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
-
-(use-package git-timemachine)
-
-;; Show changes in the gutter
-(use-package git-gutter-fringe
-  :defer 2
-
-  :config
-
-  (global-git-gutter-mode +1)
-
-  (setq-default fringes-outside-margins t)
-
-  ;; (define-fringe-bitmap 'git-gutter-fr:added [224]
-  ;;   nil nil '(center repeated))
-  ;; (define-fringe-bitmap 'git-gutter-fr:modified [224]
-  ;;   nil nil '(center repeated))
-  ;; (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
-  ;;   nil nil 'bottom)
-
-  ;; (set-face-background 'git-gutter:modified 'nil)   ;; background color
-  ;; (set-face-foreground 'git-gutter:added "green4")
-  ;; (set-face-foreground 'git-gutter:deleted "red")
-
-:blackout git-gutter-mode)
-
-;; Package `git-link' provides a simple function M-x git-link which
-;; copies to the kill ring a link to the current line of code or
-;; selection on GitHub, GitLab, etc.
-(use-package git-link
-  :config
-
-  ;; Link to a particular revision of a file rather than using the
-  ;; branch name in the URL.
-  (setq git-link-use-commit t))
 
 ;; ===============
 ;; CODE COMPLETION
@@ -1554,7 +1406,7 @@ string).  It returns t if a new completion is found, nil otherwise."
 
       (progn
         (he-substitute-string expansion t)
-        t))))
+        t)))))
 
 ;; Hippie expand: sometimes too hip
 (setq hippie-expand-try-functions-list '(try-expand-dabbrev-closest-first
@@ -1585,8 +1437,6 @@ string).  It returns t if a new completion is found, nil otherwise."
 
 ;; ===========
 ;; PROGRAMMING
-
-(defvar indent-sensitive-modes '())
 
 (use-package markdown-mode)
 
@@ -1671,82 +1521,6 @@ string).  It returns t if a new completion is found, nil otherwise."
     (add-hook 'org-mode-hook
               (lambda ()
                 (org-bullets-mode t)))))
-
-;; Open config file by pressing C-x and then C
-(global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
-
-(setq-default evil-want-C-u-scroll t)
-(setq-default evil-want-C-d-scroll t)
-(setq-default evil-symbol-word-search t)
-(setq-default evil-esc-delay 0)
-
-(use-package evil
-  :init
-  (setq evil-normal-state-cursor 'box
-        evil-insert-state-cursor 'box
-        evil-visual-state-cursor 'box
-        evil-motion-state-cursor 'box
-        evil-replace-state-cursor 'box
-        evil-operator-state-cursor 'box)
-
-  :config
-  (defadvice evil-scroll-page-down
-      (after advice-for-evil-scroll-page-down activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-scroll-page-up
-      (after advice-for-evil-scroll-page-up activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-search-next
-      (after advice-for-evil-search-next activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-search-previous
-      (after advice-for-evil-search-previous activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-
-  (define-key evil-normal-state-map (kbd "C-u") 'evil-scroll-up)
-
-  (evil-mode t)
-
-  (use-package evil-visualstar
-    :commands (evil-visualstar/begin-search
-               evil-visualstar/begin-search-forward
-               evil-visualstar/begin-search-backward)
-    :init
-    (evil-define-key* 'visual 'global
-                      "*" #'evil-visualstar/begin-search-forward
-                      "#" #'evil-visualstar/begin-search-backward))
-
-  (use-package evil-numbers
-    :config
-    (define-key evil-normal-state-map (kbd "C-c +") 'evil-numbers/inc-at-pt)
-    (define-key evil-normal-state-map (kbd "C-c -") 'evil-numbers/dec-at-pt))
-
-  (use-package evil-matchit
-    :config
-    (global-evil-matchit-mode 1))
-
-  (use-package evil-surround
-    :config
-    (global-evil-surround-mode 1)))
-
-
-(use-package lsp-mode
-  :config
-  (use-package lsp-ui
-    :hook (lsp-mode . lsp-ui-mode)
-    :config
-    (setq lsp-prefer-flymake nil)
-    (setq lsp-ui-doc-max-height 8)
-    (setq lsp-ui-doc-max-width 35)
-    (setq lsp-ui-sideline-ignore-duplicate t))
-
-  (use-package company-lsp
-    :config
-    (setq company-transformers nil)
-    (setq company-lsp-async t)
-    (setq company-lsp-enable-recompletion t)
-    (setq company-lsp-enable-snippet t)
-    (push 'company-lsp company-backends)))
 
 (use-package coffee-mode
   :mode "\\.coffee\\.*"
@@ -1842,9 +1616,12 @@ environment variables."
 (use-package robe
   :hook (ruby-mode . robe-mode)
   :bind (([remap evil-jump-to-tag] . robe-jump))
+
   :config
   (after company
-    (push 'company-robe company-backends)))
+    (push 'company-robe company-backends))
+
+  :blackout t)
 
 (use-package rspec-mode
   :after ruby-mode
@@ -1921,6 +1698,228 @@ Name is relative to the project root.")
 (use-package haml-mode
   :mode "\\.haml$")
 
+(use-package clojure-mode
+  :config/el-patch
+
+  ;; `clojure-mode' does not correctly identify the docstrings of
+  ;; protocol methods as docstrings, and as such electric indentation
+  ;; does not work for them. Additionally, when you hack a
+  ;; clojure.core function, such as defonce or defrecord, to provide
+  ;; docstring functionality, those docstrings are (perhaps rightly,
+  ;; but annoyingly) not recognized as docstrings either. However,
+  ;; there is an easy way to get electric indentation working for all
+  ;; potential docstrings: simply tell `clojure-mode' that *all*
+  ;; strings are docstrings. This will not change the font locking,
+  ;; because for some weird reason `clojure-mode' determines whether
+  ;; you're in a docstring by the font color instead of the other way
+  ;; around. Note that this will cause electric indentation by two
+  ;; spaces in *all* multiline strings, but since there are not very
+  ;; many non-docstring multiline strings in Clojure this is not too
+  ;; inconvenient.
+  ;;
+  ;; Unfortunately, `clojure-in-docstring-p' is defined as an inline
+  ;; function, so after changing it, we also have to replace
+  ;; `clojure-indent-line'. That is done in an advice in the
+  ;; `radian-clojure-strings-as-docstrings-mode' minor mode.
+
+  (defsubst (el-patch-swap clojure-in-docstring-p
+                           radian--clojure-in-string-p)
+    ()
+    (el-patch-concat
+      "Check whether point is in "
+      (el-patch-swap "a docstring" "any type of string")
+      ".")
+    (let ((ppss (syntax-ppss)))
+      ;; are we in a string?
+      (when (nth 3 ppss)
+        ;; check font lock at the start of the string
+        ((el-patch-swap eq memq)
+         (get-text-property (nth 8 ppss) 'face)
+         (el-patch-wrap 1
+           ('font-lock-string-face 'font-lock-doc-face))))))
+
+  (defun (el-patch-swap clojure-indent-line
+                        radian--advice-clojure-strings-as-docstrings)
+      ()
+    (el-patch-concat
+      "Indent current line as Clojure code."
+      (el-patch-add
+        "\n\nThis is an `:override' advice for `clojure-indent-line'."))
+    (if (el-patch-swap
+          (clojure-in-docstring-p)
+          (radian--clojure-in-string-p))
+        (save-excursion
+          (beginning-of-line)
+          (when (and (looking-at "^\\s-*")
+                     (<= (string-width (match-string-no-properties 0))
+                         (string-width (clojure-docstring-fill-prefix))))
+            (replace-match (clojure-docstring-fill-prefix))))
+      (lisp-indent-line)))
+
+  :config
+
+  ;; Customize indentation like this:
+  ;;
+  ;; (some-function
+  ;;   argument
+  ;;   argument)
+  ;;
+  ;; (some-function argument
+  ;;                argument)
+  ;;
+  ;; (-> foo
+  ;;   thread
+  ;;   thread)
+  ;;
+  ;; (->> foo
+  ;;   thread
+  ;;   thread)
+  ;;
+  ;; (:keyword
+  ;;   map)
+
+  (setq clojure-indent-style :align-arguments)
+
+  ;; Ideally, we would be able to set the identation rules for *all*
+  ;; keywords at the same time. But until we figure out how to do
+  ;; that, we just have to deal with every keyword individually. See
+  ;; https://github.com/raxod502/radian/issues/26.
+  (radian-protect-macros
+    (define-clojure-indent
+      (-> 1)
+      (->> 1)
+      (:import 0)
+      (:require 0)
+      (:use 0)))
+
+  (define-minor-mode radian-clojure-strings-as-docstrings-mode
+    "Treat all Clojure strings as docstrings.
+You want to turn this on if you want to treat strings like
+docstrings even though they technically are not, and you want to
+turn it off if you have multiline strings that are not
+docstrings."
+    nil nil nil
+    (if radian-clojure-strings-as-docstrings-mode
+        (advice-add #'clojure-indent-line :override
+                    #'radian--advice-clojure-strings-as-docstrings)
+      (advice-remove #'clojure-indent-line
+                     #'radian--advice-clojure-strings-as-docstrings))))
+
+;; Package `cider' provides integrated Clojure and ClojureScript REPLs
+;; directly in Emacs, a Company backend that uses a live REPL
+;; connection to retrieve completion candidates, and documentation and
+;; source lookups for Clojure code.
+(use-package cider
+  :config
+
+  ;; By default, any error messages that occur when CIDER is starting
+  ;; up are placed in the *nrepl-server* buffer and not in the
+  ;; *cider-repl* buffer. This is silly, since no-one wants to check
+  ;; *nrepl-server* every time they start a REPL, and if you don't
+  ;; then startup errors (including errors in anything loaded by the
+  ;; :main namespace) are effectively silenced. So we copy everything
+  ;; from the *nrepl-server* buffer to the *cider-repl* buffer, as
+  ;; soon as the latter is available.
+  ;;
+  ;; Note that this does *not* help in the case of things going so
+  ;; horribly wrong that the REPL can't even start. In this case you
+  ;; will have to check the *nrepl-server* buffer manually. Perhaps an
+  ;; error message that is visible from any buffer could be added in
+  ;; future.
+  ;;
+  ;; Thanks to malabarba on Clojurians Slack for providing the
+  ;; following code:
+
+  (radian-defhook radian--cider-dump-nrepl-server-log ()
+    cider-connected-hook
+    "Copy contents of *nrepl-server* to beginning of *cider-repl*."
+    (save-excursion
+      (goto-char (point-min))
+      (insert
+       (with-current-buffer nrepl-server-buffer
+         (buffer-string)))))
+
+  ;; Use the :emacs profile defined in profiles.clj. This enables lots
+  ;; of cool extra features in the REPL.
+  ;; (setq cider-lein-parameters "with-profile +emacs repl :headless")
+
+  ;; The CIDER welcome message often obscures any error messages that
+  ;; the above code is supposed to be making visible. So, we need to
+  ;; turn off the welcome message.
+  (setq cider-repl-display-help-banner nil)
+
+  ;; Sometimes in the CIDER REPL, when Emacs is running slowly, you
+  ;; can manage to press TAB before the Company completions menu pops
+  ;; up. This triggers a `completing-read', which is disorienting. So
+  ;; we reset TAB to its default functionality (i.e. indent only) in
+  ;; the CIDER REPL.
+  (setq cider-repl-tab-command 'indent-for-tab-command)
+
+  ;; Don't focus the cursor in the CIDER REPL once it starts. Since
+  ;; the REPL takes so long to start up, especially for large
+  ;; projects, you either have to wait for a minute without doing
+  ;; anything or be prepared for your cursor to suddenly shift buffers
+  ;; without warning sometime in the near future. This is annoying, so
+  ;; turn off the behavior. For a historical perspective see [1].
+  ;;
+  ;; [1]: https://github.com/clojure-emacs/cider/issues/1872
+  (setq cider-repl-pop-to-buffer-on-connect 'display-only)
+
+  ;; Use figwheel-sidecar for launching ClojureScript REPLs. This
+  ;; supports a fully integrated ClojureScript development experience
+  ;; in Emacs, for use with e.g. [1]. The last three forms are from
+  ;; the definition of `cider--cljs-repl-types'; the first two work
+  ;; around [2].
+  ;;
+  ;; [1]: https://github.com/reagent-project/reagent-template
+  ;; [2]: https://github.com/reagent-project/reagent-template/issues/132
+  (setq cider-cljs-lein-repl
+        "(do
+  (require 'clojure.java.shell)
+  (clojure.java.shell/sh \"lein\" \"clean\")
+  (require 'figwheel-sidecar.repl-api)
+  (figwheel-sidecar.repl-api/start-figwheel!)
+  (figwheel-sidecar.repl-api/cljs-repl))")
+
+  :blackout t)
+
+;; Package `clj-refactor' provides automated refactoring commands for
+;; Clojure code.
+(use-package clj-refactor
+  :init
+
+  (radian-defhook radian--clj-refactor-enable ()
+    clojure-mode-hook
+    "Enable `clj-refactor' mode properly.
+This means that `yas-minor-mode' also needs to be enabled, and
+the `clj-refactor' keybindings need to be installed."
+    (clj-refactor-mode +1)
+    (yas-minor-mode +1)
+    (cljr-add-keybindings-with-prefix "C-c RET"))
+
+  :config
+
+  ;; Make clj-refactor show its messages right away, instead of
+  ;; waiting for you to do another command.
+
+  (radian-defadvice radian--advice-clj-refactor-message-eagerly (&rest args)
+    :override cljr--post-command-message
+    "Make `clj-refactor' show messages right away.
+Otherwise, it waits for you to do another command, and then
+overwrites the message from *that* command."
+    (apply #'message args))
+
+  ;; Automatically sort project dependencies after changing them.
+  (setq cljr-auto-sort-project-dependencies t)
+
+  ;; Don't print a warning when starting a REPL outside of project
+  ;; context.
+  (setq cljr-suppress-no-project-warning t)
+
+  :blackout t)
+
+;;;; Utilities
+
 (defun copy-buffer-file-name ()
   "Copy buffer's full path."
   (interactive)
@@ -1943,11 +1942,18 @@ Name is relative to the project root.")
 (global-set-key (kbd "s-f") #'copy-buffer-file-name)
 
 (use-package string-inflection
-  :config
-  (global-set-key (kbd "C-c i") 'string-inflection-cycle)
-  (global-set-key (kbd "C-c C") 'string-inflection-camelcase)
-  (global-set-key (kbd "C-c L") 'string-inflection-lower-camelcase)
-  (global-set-key (kbd "C-c J") 'string-inflection-java-style-cycle))
+  :bind (("C-c i" . string-inflection-cycle)
+         ("C-c C" . string-inflection-camelcase)
+         ("C-c L" . string-inflection-lower-camelcase)
+         ("C-c J" . string-inflection-java-style-cycle)))
+
+(use-package crux
+  :bind (("C-k" . crux-smart-kill-line)
+         ("C-a" . crux-move-beginning-of-line)
+         ("C-c o" . crux-open-with)
+         ([(shift return)] . crux-smart-open-line)
+         ("s-<backspace>" . crux-kill-whole-line)
+         ("C-c n" . crux-cleanup-buffer-or-region)))
 
 (use-package dash
   :config
@@ -2157,28 +2163,6 @@ region-end is used."
           (kill-ring-save (region-beginning) (region-end))
         (copy-line arg)))
 
-    (defun kill-and-retry-line ()
-      "Kill the entire current line and reposition point at indentation"
-      (interactive)
-      (back-to-indentation)
-      (kill-line))
-
-    (defun camelize-buffer ()
-      (interactive)
-      (goto-char 0)
-      (ignore-errors
-        (replace-next-underscore-with-camel 0))
-      (goto-char 0))
-
-    ;; kill all comments in buffer
-    (defun comment-kill-all ()
-      (interactive)
-      (save-excursion
-        (goto-char (point-min))
-        (comment-kill (save-excursion
-                        (goto-char (point-max))
-                        (line-number-at-pos)))))
-
     (defun incs (s &optional num)
       (let* ((inc (or num 1))
              (new-number (number-to-string (+ inc (string-to-number s))))
@@ -2216,36 +2200,6 @@ region-end is used."
       (interactive "p")
       (change-number-at-point (- arg)))
 
-    (defun replace-next-underscore-with-camel (arg)
-      (interactive "p")
-      (if (> arg 0)
-          (setq arg (1+ arg))) ; 1-based index to get eternal loop with 0
-      (let ((case-fold-search nil))
-        (while (not (= arg 1))
-          (search-forward-regexp "\\b_[a-z]")
-          (forward-char -2)
-          (delete-char 1)
-          (capitalize-word 1)
-          (setq arg (1- arg)))))
-
-    (defun snakeify-current-word ()
-      (interactive)
-      (er/mark-word)
-      (let* ((beg (region-beginning))
-             (end (region-end))
-             (current-word (buffer-substring-no-properties beg end))
-             (snakified (snake-case current-word)))
-        (replace-string current-word snakified nil beg end)))
-
-    (defun kebab-current-word ()
-      (interactive)
-      (er/mark-word)
-      (let* ((beg (region-beginning))
-             (end (region-end))
-             (current-word (buffer-substring-no-properties beg end))
-             (kebabed (s-dashed-words current-word)))
-        (replace-string current-word kebabed nil beg end)))
-
     (defun transpose-params ()
       "Presumes that params are in the form (p, p, p) or {p, p, p} or [p, p, p]"
       (interactive)
@@ -2279,32 +2233,10 @@ region-end is used."
          ((looking-back ")\\|}\\|\\]") (backward-list))
          (t (backward-char)))))
 
-    (autoload 'zap-up-to-char "misc"
-      "Kill up to, but not including ARGth occurrence of CHAR.")
-
-    (defun css-expand-statement ()
-      (interactive)
-      (save-excursion
-        (end-of-line)
-        (search-backward "{")
-        (forward-char 1)
-        (let ((beg (point)))
-          (newline)
-          (er/mark-inside-pairs)
-          (replace-regexp ";" ";\n" nil (region-beginning) (region-end))
-          (indent-region beg (point)))))
-
-    (defun css-contract-statement ()
-      (interactive)
-      (end-of-line)
-      (search-backward "{")
-      (while (not (looking-at "}"))
-        (join-line -1))
-      (back-to-indentation))
-
     (defun +join-line-indent ()
       (interactive)
       (save-excursion
+        (forward-line +1)
         (join-line)
         (indent-according-to-mode)))
 
@@ -2314,9 +2246,116 @@ region-end is used."
       (end-of-line)
       (newline-and-indent))
 
-    (global-set-key (kbd "M-RET") 'newline-anywhere)
-
     (global-set-key (kbd "C-M-j") #'+join-line-indent)
     (global-set-key (kbd "C-w") 'kill-region-or-backward-word)
-    (global-set-key (kbd "C-c C-j") 'duplicate-current-line-or-region)
-    (global-set-key (kbd "C-c C--") 'replace-next-underscore-with-camel)))
+    (global-set-key (kbd "C-c C-j") 'duplicate-current-line-or-region)))
+  ;; ========================
+  ;; VERSION CONTROL WITH GIT
+
+;; Magit
+(use-package magit
+  :bind (("C-x g" . magit-status)
+         ("C-x C-b" . magit-blame-addition))
+  :config
+  (setq magit-diff-refine-hunk 'all)
+  (setq magit-log-auto-more t)
+  (setq magit-completing-read-function 'ivy-completing-read)
+
+  (set-default 'magit-push-always-verify nil)
+  (set-default 'magit-revert-buffers 'silent)
+  (set-default 'magit-no-confirm '(stage-all-changes
+                                   unstage-all-changes))
+
+  (defun +magit-display-buffer (buffer)
+    "Like `magit-display-buffer-fullframe-status-v1' with two differences:
+
+1. Magit sub-buffers that aren't spawned from a status screen are opened as
+   popups.
+2. The status screen isn't buried when viewing diffs or logs from the status
+   screen.
+
+   Taken from doom-emacs
+   "
+    (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
+      (display-buffer
+       buffer (cond
+               ;; If opened from an eshell window or popup, use the same window.
+               ((or (derived-mode-p 'eshell-mode)
+                    (eq (window-dedicated-p) 'side))
+                '(display-buffer-same-window))
+               ;; Open target buffers below the current one (we want previous
+               ;; magit windows to be visible; especially magit-status).
+               ((or (bound-and-true-p git-commit-mode)
+                    (derived-mode-p 'magit-mode))
+                (let ((size (if (eq buffer-mode 'magit-process-mode)
+                                0.35
+                              0.7)))
+                  `(display-buffer-below-selected
+                    . ((window-height . ,(truncate (* (window-height) size)))))))
+               ;; log/stash/process buffers, unless opened from a magit-status
+               ;; window, should be opened in popups.
+               ((memq buffer-mode '(magit-process-mode
+                                    magit-log-mode
+                                    magit-stash-mode))
+                '(display-buffer-below-selected))
+               ;; Last resort: use current window
+               ('(display-buffer-same-window))))))
+
+  ;; (defun +magit-display-popup-buffer (buffer &optional alist)
+  ;;   "TODO"
+  ;;   (cond ((eq (window-dedicated-p) 'side)
+  ;;          (if (fboundp '+popup-display-buffer-stacked-side-window)
+  ;;              (+popup-display-buffer-stacked-side-window buffer alist)
+  ;;            (display-buffer-in-side-window buffer alist)))
+  ;;         ((derived-mode-p 'magit-mode)
+  ;;          (display-buffer-below-selected buffer alist))
+  ;;         ((display-buffer-in-side-window buffer alist))))
+
+  (setq magit-display-buffer-function #'+magit-display-buffer)
+  ;; (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
+
+  (defun enforce-git-commit-conventions ()
+    "See https://chris.beams.io/posts/git-commit/"
+    (setq fill-column 72
+          git-commit-summary-max-length 50
+          git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
+  (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
+
+(use-package git-timemachine)
+
+;; Show changes in the gutter
+(use-package git-gutter-fringe
+  :defer 2
+
+  :config
+
+  (global-git-gutter-mode +1)
+
+  (setq-default fringes-outside-margins t)
+
+  ;; (define-fringe-bitmap 'git-gutter-fr:added [224]
+  ;;   nil nil '(center repeated))
+  ;; (define-fringe-bitmap 'git-gutter-fr:modified [224]
+  ;;   nil nil '(center repeated))
+  ;; (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
+  ;;   nil nil 'bottom)
+
+  ;; (set-face-background 'git-gutter:modified 'nil)   ;; background color
+  ;; (set-face-foreground 'git-gutter:added "green4")
+  ;; (set-face-foreground 'git-gutter:deleted "red")
+
+  :blackout git-gutter-mode)
+
+;; Package `git-link' provides a simple function M-x git-link which
+;; copies to the kill ring a link to the current line of code or
+;; selection on GitHub, GitLab, etc.
+(use-package git-link
+  :config
+
+  ;; Link to a particular revision of a file rather than using the
+  ;; branch name in the URL.
+  (setq git-link-use-commit t))
+
+(global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
+
+(use-package restart-emacs)
