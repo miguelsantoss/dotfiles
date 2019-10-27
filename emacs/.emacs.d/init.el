@@ -5,23 +5,30 @@
 
 ;;; Code:
 
-(setq ms-original-gc-cons-threshold gc-cons-threshold)
+(setq +original-gc-cons-threshold gc-cons-threshold)
 
-(add-hook 'after-init-hook #'(lambda ()
-                               ;; restore after startup
-                               (setq gc-cons-threshold ms-original-gc-cons-threshold)))
+(defvar +gc-cons-threshold 41943040 ; 40mb
+  "The default value to use for `gc-cons-threshold'. If you experience freezing,
+decrease this. If you experience stuttering, increase this.")
 
-(setq gc-cons-threshold (* 5 1000 1000))
+(defvar +gc-cons-upper-limit 536870912 ; 512mb
+  "The temporary value for `gc-cons-threshold' to defer it.")
 
-(defvar indent-sensitive-modes '(coffee-mode))
+(setq gc-cons-threshold +gc-cons-upper-limit)
+
+(defun +restore-startup ()
+  "Reset garbage collection settings"
+  (run-with-idle-timer 3 nil (lambda ()
+                               (setq-default gc-cons-threshold +gc-cons-threshold)
+                               (add-hook 'focus-out-hook #'garbage-collect))))
+
+(add-hook 'after-init-hook #'+restore-startup)
+
 (defvar *is-mac* (eq system-type 'darwin))
 (defvar *is-linux* (eq system-type 'gnu/linux))
-;; (define-prefix-command 'hemacs-git-map)
-;; (bind-key "s-g" #'hemacs-git-map)
 
 ;; Use the develop branch of straight.el
 (setq straight-repository-branch "develop")
-(setq straight-use-package-by-default t)
 
 (let ((bootstrap-file
        (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
@@ -37,10 +44,20 @@
 
 (straight-use-package 'use-package)
 
+(setq straight-use-package-by-default t)
+
+(use-package blackout
+  :straight (:host github :repo "raxod502/blackout")
+  :demand t)
+
+(use-feature straight-x
+  ;; Add an autoload for this extremely useful command.
+  :commands (straight-x-fetch-all))
+
 (use-package no-littering
   :demand t)
 
-(straight-use-package 'org)
+;; (straight-use-package 'org)
 
 (use-package el-patch
   :straight (:host github
@@ -48,17 +65,15 @@
                    :branch "develop")
   :demand t)
 
-(setq use-package-always-ensure t)
-
-(defmacro use-feature (name &rest args)
-  "Like `use-package', but with `straight-use-package-by-default' disabled."
-  (declare (indent defun))
-  `(use-package ,name
-     :straight nil
-     ,@args))
+;; TODO: remove
+;; (setq use-package-always-ensure t)
 
 (use-package s)
 (use-package restart-emacs)
+
+(use-feature server
+  :init
+  (if (not (server-running-p)) (server-start)))
 
 (use-package exec-path-from-shell
   :config
@@ -84,17 +99,14 @@
 ;; MODIFIER KEYS
 
 ;; Both command keys are 'Super'
-(setq mac-right-command-modifier 'super)
-(setq mac-command-modifier 'super)
+(when *is-mac*
+  (setq mac-right-command-modifier 'super)
+  (setq mac-command-modifier 'super)
+  ;; Option or Alt is naturally 'Meta'
+  (setq mac-option-modifier 'meta)
+  ;; Right Alt (option) can be used to enter symbols like em dashes '—' and euros '€' and stuff.
+  (setq mac-right-option-modifier 'nil))
 
-;; Option or Alt is naturally 'Meta'
-(setq mac-option-modifier 'meta)
-
-;; Right Alt (option) can be used to enter symbols like em dashes '—' and euros '€' and stuff.
-(setq mac-right-option-modifier 'nil)
-
-;; Control is control, and you also need to change Caps Lock to Control in the Keyboard
-;; preferences in macOS.
 
 (setq initial-scratch-message nil)
 ;; =============
@@ -125,7 +137,7 @@
 (setq create-lockfiles nil)
 
 ;; Always prefer newer files
-(setq load-prefer-newer +1)
+(setq load-prefer-newer t)
 
 ;; Warn only when opening files bigger than 100MB
 (setq large-file-warning-threshold 100000000)
@@ -144,22 +156,15 @@
  echo-keystrokes 0.1               ; Show keystrokes right away, don't show the message in the scratch buffer
  sentence-end-double-space nil     ; Sentences should end in one space, come on!
  help-window-select t              ; Select help window so it's easy to quit it with 'q'
-)
+ )
 
 ;; never kill *scratch* buffer
 (add-hook 'kill-buffer-query-functions
           (lambda() (not (equal (buffer-name) "*scratch*"))))
 
-;; mode line settings
-(line-number-mode t)
-(column-number-mode t)
-(size-indication-mode t)
-
 (defalias 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
 (delete-selection-mode 1)          ; Delete selected text when typing
 (global-unset-key (kbd "s-p"))     ; Don't print
-
-(setq ring-bell-function 'ignore)
 
 ;; Delete trailing spaces and add new line in the end of a file on save.
 (add-hook 'before-save-hook 'delete-trailing-whitespace)
@@ -179,30 +184,38 @@
 
 (recentf-mode +1)
 
-(global-set-key (kbd "C-c C-c") 'comment-dwim)
-
 ;; =======
 ;; VISUALS
 
-;; Enable transparent title bar on macOS
+(when *is-linux* (menu-bar-mode -1))
+(tool-bar-mode -1)
+(scroll-bar-mode -1)
+(blink-cursor-mode +1)
+
+;; mode line settings
+(line-number-mode t)
+(column-number-mode t)
+(size-indication-mode t)
+
+;; Always wrap lines
+(global-visual-line-mode +1)
+
+;; Highlight current line
+(global-hl-line-mode 0)
+
+;; Show line numbers
+(global-display-line-numbers-mode t)
+(define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
+
+; Enable transparent title bar on macOS
 (when *is-mac*
   (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
   (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
 
-;; Font
-(setq +font-face "Input Mono Narrow")
-(setq +font-size 14)
-;; (setq mac-allow-anti-aliasing nil)
-
-(defun +set-font ()
-  "Set fot according to +font-face and +font-size."
-  (interactive)
-  (when (member +font-face (font-family-list))
-    (set-face-attribute 'default nil
-                        :font (concat +font-face " "
-                                      (number-to-string +font-size)))))
-
-(+set-font)
+(setq visible-bell nil)
+(setq ring-bell-function (lambda ()
+                           (invert-face 'mode-line)
+                           (run-with-timer 0.05 nil 'invert-face 'mode-line)))
 
 ;; Nice and simple default light theme.
 (setq custom-theme-directory (concat user-emacs-directory "themes"))
@@ -221,40 +234,35 @@
   "Disable active themes before loading the new theme."
   (+disable-themes))
 
-(use-package zenburn-theme)
-(use-package dracula-theme)
-(use-package solarized-theme)
+;; (use-package brutalist-theme
+;;   :config
+;;   (load-theme 'brutalist t))
 
 (load-theme 'tsdh-light t)
 
-;; Pretty icons
-(use-package all-the-icons)
-;; MUST DO M-x all-the-icons-install-fonts after
+(use-package leuven-theme
+  :config
+  (load-theme 'leuven t))
 
-;; Hide toolbar and scroll bar
-(tool-bar-mode -1)
-(scroll-bar-mode -1)
-(when *is-linux* (menu-bar-mode -1))
+(fringe-mode '(2 . 2))
 
-;; Disable blinking cursor.
-(blink-cursor-mode 0)
+(setq +font "IBM Plex Mono 14")
+(setq +font "Go Mono 14")
+(setq +font "Consolas 15")
+(setq +font "Menlo 14")
+(setq +font "Roboto Mono 14")
+(setq +font "Fira Code Retina 14")
 
-;; Always wrap lines
-(global-visual-line-mode t)
-
-;; Show line numbers
-(global-display-line-numbers-mode t)
-(define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
-
-;; Highlight current line
-;; (global-hl-line-mode 1)
+(let ((font +font))
+  (set-frame-font font)
+  (add-to-list 'default-frame-alist
+               `(font . ,font)))
 
 ;; Show parens and other pairs.
+
 (use-package smartparens
   :config
-
   (require 'smartparens-config)
-
   (smartparens-global-mode +1)
   (show-smartparens-global-mode +1))
 
@@ -273,9 +281,6 @@
           uniquify-after-kill-buffer-p t
           uniquify-ignore-buffers-re "^\\*")))
 
-(use-package treemacs
-  :defer t)
-
 ;; Show full path in the title bar.
 ;; (setq-default frame-title-format "%b (%f)")
 (setq-default frame-title-format "")
@@ -292,12 +297,6 @@
 (setq-default tab-width 2)
 (setq-default c-basic-indent 2)
 
-;; Show keybindings cheatsheet
-;; (use-package which-key
-;;   :config
-;;   (which-key-mode)
-;;   (setq which-key-idle-delay 0.5))
-
 (use-package restart-emacs)
 
 ;; ================
@@ -308,31 +307,6 @@
 ;; Kill forward word with Alt-Shift-Backspace.
 (global-set-key (kbd "s-<backspace>") 'kill-whole-line)
 (global-set-key (kbd "M-S-<backspace>") 'kill-word)
-
-(defun smarter-move-beginning-of-line (arg)
-  "Move point back to indentation of beginning of line.
-
-Move point to the first non-whitespace character on this line.
-If point is already there, move to the beginning of the line.
-Effectively toggle between the first non-whitespace character and
-the beginning of the line.
-
-If ARG is not nil or 1, move forward ARG - 1 lines first.  If
-point reaches the beginning or end of the buffer, stop there."
-  (interactive "^p")
-  (setq arg (or arg 1))
-
-  ;; Move lines first
-  (when (/= arg 1)
-    (let ((line-move-visual nil))
-      (forward-line (1- arg))))
-
-  (let ((orig-point (point)))
-    (back-to-indentation)
-    (when (= orig-point (point))
-      (move-beginning-of-line 1))))
-
-(global-set-key (kbd "C-a") 'smarter-move-beginning-of-line)
 
 ;; Many commands in Emacs write the current position into mark ring.
 ;; These custom functions allow for quick movement backward and forward.
@@ -373,17 +347,12 @@ point reaches the beginning or end of the buffer, stop there."
 (setq disabled-command-function nil)
 
 (use-package expand-region
-  :bind (("C-=" . #'er/expand-region)
+  :bind (("M-m" . #'er/expand-region)
          ("C-'" . #'er/contract-region)))
 
 (use-package change-inner
   :bind (("M-i" . #'change-inner)
          ("M-o" . #'change-outer)))
-
-;; Move-text lines around with meta-up/down.
-(use-package move-text
-  :config
-  (move-text-default-bindings))
 
 (use-package smart-newline
   :bind
@@ -435,29 +404,23 @@ point reaches the beginning or end of the buffer, stop there."
          ("s-D" . mc/mark-previous-like-this)
          ("C-c s-d" . mc/mark-all-like-this-dwim))
   :config
-  (multiple-cursors-mode 1))
+  (multiple-cursors-mode +1))
 
 (use-package evil-mc
+  :disabled t
   :config
-  (global-evil-mc-mode 1))
+  (global-evil-mc-mode +1))
 
-(use-package volatile-highlights
+(use-package crux
+  :demand t
+  :bind
+  ("C-k" . crux-smart-kill-line)
+  ("C-c n" . crux-cleanup-buffer-or-region)
+  ("C-c f" . crux-recentf-find-file)
+  ("C-a" . crux-move-beginning-of-line)
+  ("C-c C-j" . crux-duplicate-current-line-or-region)
   :config
-  (vhl/define-extension 'my-evil-highlights
-                        'evil-yank
-                        'evil-paste-after
-                        'evil-paste-before
-                        'evil-move)
-
-  (vhl/install-extension 'my-evil-highlights)
-
-  (vhl/define-extension 'my-undo-tree-highlights
-                        'undo-tree-undo
-                        'undo-tree-redo)
-
-  (vhl/install-extension 'my-undo-tree-highlights)
-
-  (volatile-highlights-mode +1))
+  (global-set-key (kbd "C-c C-c") (crux-with-region-or-line comment-or-uncomment-region)))
 
 ;; =================
 ;; WINDOW MANAGEMENT
@@ -526,165 +489,237 @@ point reaches the beginning or end of the buffer, stop there."
 
 ;; Use Projectile for project management.
 (use-package projectile
+  :defer 1
+
   :config
   (setq projectile-switch-project-action #'projectile-dired)
-  (setq projectile-enable-caching t)
+  ;; (setq projectile-enable-caching t)
+  (setq projectile-completion-system 'ivy)
+
   (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
   (global-set-key (kbd "C-x p s s") 'counsel-projectile-ag)
-  (projectile-mode 1))
+
+  (projectile-mode +1)
+
+  :blackout t)
+
+(use-package counsel-projectile
+  :init
+
+  (counsel-projectile-mode +1)
+
+  :config
+
+  ;; Sort files using `prescient', instead of just showing them in
+  ;; lexicographic order.
+  (setq counsel-projectile-sort-files t))
+
+
 
 (use-package deadgrep
   :defer t
-  :commands (deadgrep))
+  :bind ("C-c h" . deadgrep))
 
 ;; ==========================================
 ;; MENUS AND COMPLETION (not code completion)
 
+;;;; Candidate selection
 
-;; Use minimalist Ivy for most things.
+; Package `ivy' provides a user interface for choosing from a list of
+;; options by typing a query to narrow the list, and then selecting
+;; one of the remaining candidates. This offers a significant
+;; improvement over the default Emacs interface for candidate
+;; selection.
 (use-package ivy
+  :init/el-patch
+
+  (defvar ivy-mode-map
+    (let ((map (make-sparse-keymap)))
+      (define-key map [remap switch-to-buffer]
+        'ivy-switch-buffer)
+      (define-key map [remap switch-to-buffer-other-window]
+        'ivy-switch-buffer-other-window)
+      map)
+    "Keymap for `ivy-mode'.")
+
+  (define-minor-mode ivy-mode
+    (el-patch-concat
+      "Toggle Ivy mode on or off.
+Turn Ivy mode on if ARG is positive, off otherwise.
+Turning on Ivy mode sets `completing-read-function' to
+`ivy-completing-read'.
+Global bindings:
+\\{ivy-mode-map}
+Minibuffer bindings:
+\\{ivy-minibuffer-map}"
+      (el-patch-add
+        "\n\nTo make it easier to lazy-load `ivy', this function
+sets `completion-in-region-function' regardless of the value of
+`ivy-do-completion-in-region'."))
+    :group 'ivy
+    :global t
+    :keymap ivy-mode-map
+    (el-patch-remove
+      :lighter " ivy")
+    (if ivy-mode
+        (progn
+          (setq completing-read-function 'ivy-completing-read)
+          (el-patch-splice 2
+            (when ivy-do-completion-in-region
+              (setq completion-in-region-function 'ivy-completion-in-region))))
+      (setq completing-read-function 'completing-read-default)
+      (setq completion-in-region-function 'completion--in-region)))
+
+  (ivy-mode +1)
+
   :config
-  (setq ivy-use-virtual-buffers t)      ;; show bookmarks and recent files in buffer list
-  (setq ivy-count-format "(%d/%d) ")
-  (setq enable-recursive-minibuffers t)
-  (setq confirm-nonexistent-file-or-buffer t)
 
-  (setq ivy-re-builders-alist '((t . ivy--regex-ignore-order)))
-  (setq ivy-initial-inputs-alist nil)
+  ;; With enough packages loaded, it is easy to get commands like
+  ;; `describe-symbol' to offer more than 30,000 candidates. Allow
+  ;; sorting in these cases.
+  (setq ivy-sort-max-size 50000)
 
-  (ivy-mode t)                          ;; enable Ivy everywhere
+  (global-set-key (kbd "C-c C-r") 'ivy-resume)
 
-  ;; (global-set-key (kbd "s-b") 'ivy-switch-buffer)  ;; Cmd+b show buffers and recent files
-  ;; (global-set-key (kbd "C-k") 'ivy-immediate-done)
-  (global-set-key (kbd "M-s-b") 'ivy-resume)
+  :blackout t)
 
-  ;; Swiper is a better local finder.
-  (use-package swiper
-    :bind (("C-s" . swiper)))
+;; Package `ivy-hydra' provides the C-o binding for Ivy menus which
+;; allows you to pick from a set of options for what to do with a
+;; selected candidate.
+(use-package ivy-hydra)
 
-  (use-package phi-search
-    :disabled t
-    :bind (("C-s" . phi-search)
-           ("C-r" . phi-search-backward)))
+;; Package `counsel' provides purpose-built replacements for many
+;; built-in Emacs commands that use enhanced configurations of `ivy'
+;; to provide extra features.
+(use-package counsel
+  :init/el-patch
 
-  ;; Better menus with Counsel (a layer on top of Ivy)
-  ;; (use-package counsel
-  ;;   :custom
-  ;;   (counsel-ag-base-command "ag -S --nogroup --nocolor --ignore tmp --ignore icn_react/static --ignore icn_docker --ignore lib/assets %s ")
-  ;;   (counsel-rg-base-command "rg -S --no-heading --color never -g '!{icn_docker,tmp}/*' %s ")
-  ;;   :config
-  ;;   (global-set-key (kbd "M-x") 'counsel-M-x)
-  ;;   (global-set-key (kbd "C-x f") 'counsel-recentf)
-  ;;   (global-set-key (kbd "C-x C-f") 'counsel-find-file)
-  ;;   (global-set-key (kbd "C-x C-i") 'counsel-imenu))
-
-  (use-package counsel
-    :init/el-patch
-
-    (defvar counsel-mode-map
-      (let ((map (make-sparse-keymap)))
-        (dolist (binding
-                 '((execute-extended-command . counsel-M-x)
-                   (describe-bindings . counsel-descbinds)
-                   (el-patch-remove
-                     (describe-function . counsel-describe-function)
-                     (describe-variable . counsel-describe-variable))
-                   (apropos-command . counsel-apropos)
-                   (describe-face . counsel-describe-face)
-                   (list-faces-display . counsel-faces)
-                   (find-file . counsel-find-file)
-                   (find-library . counsel-find-library)
-                   (imenu . counsel-imenu)
-                   (load-library . counsel-load-library)
-                   (load-theme . counsel-load-theme)
-                   (yank-pop . counsel-yank-pop)
-                   (info-lookup-symbol . counsel-info-lookup-symbol)
-                   (pop-to-mark-command . counsel-mark-ring)
-                   (bookmark-jump . counsel-bookmark)))
-          (define-key map (vector 'remap (car binding)) (cdr binding)))
-        map)
-      (el-patch-concat
-        "Map for `counsel-mode'.
+  (defvar counsel-mode-map
+    (let ((map (make-sparse-keymap)))
+      (dolist (binding
+               '((execute-extended-command . counsel-M-x)
+                 (describe-bindings . counsel-descbinds)
+                 (el-patch-remove
+                   (describe-function . counsel-describe-function)
+                   (describe-variable . counsel-describe-variable))
+                 (apropos-command . counsel-apropos)
+                 (describe-face . counsel-describe-face)
+                 (list-faces-display . counsel-faces)
+                 (find-file . counsel-find-file)
+                 (find-library . counsel-find-library)
+                 (imenu . counsel-imenu)
+                 (load-library . counsel-load-library)
+                 (load-theme . counsel-load-theme)
+                 (yank-pop . counsel-yank-pop)
+                 (info-lookup-symbol . counsel-info-lookup-symbol)
+                 (pop-to-mark-command . counsel-mark-ring)
+                 (bookmark-jump . counsel-bookmark)))
+        (define-key map (vector 'remap (car binding)) (cdr binding)))
+      map)
+    (el-patch-concat
+      "Map for `counsel-mode'.
 Remaps built-in functions to counsel replacements."
-        (el-patch-add
-          "\n\nBindings that are remapped by `helpful' have been removed.")))
+      (el-patch-add
+        "\n\nBindings that are remapped by `helpful' have been removed.")))
 
-    (defcustom counsel-mode-override-describe-bindings nil
-      "Whether to override `describe-bindings' when `counsel-mode' is active."
-      :group 'ivy
-      :type 'boolean)
+  (defcustom counsel-mode-override-describe-bindings nil
+    "Whether to override `describe-bindings' when `counsel-mode' is active."
+    :group 'ivy
+    :type 'boolean)
 
-    (define-minor-mode counsel-mode
-      "Toggle Counsel mode on or off.
+  (define-minor-mode counsel-mode
+    "Toggle Counsel mode on or off.
 Turn Counsel mode on if ARG is positive, off otherwise. Counsel
 mode remaps built-in emacs functions that have counsel
 replacements.
 Local bindings (`counsel-mode-map'):
 \\{counsel-mode-map}"
-      :group 'ivy
-      :global t
-      :keymap counsel-mode-map
-      (el-patch-remove
-        :lighter " counsel")
-      (if counsel-mode
-          (progn
-            (when (and (fboundp 'advice-add)
-                       counsel-mode-override-describe-bindings)
-              (advice-add #'describe-bindings :override #'counsel-descbinds))
-            (define-key minibuffer-local-map (kbd "C-r")
-              'counsel-minibuffer-history))
-        (when (fboundp 'advice-remove)
-          (advice-remove #'describe-bindings #'counsel-descbinds))))
+    :group 'ivy
+    :global t
+    :keymap counsel-mode-map
+    (el-patch-remove
+      :lighter " counsel")
+    (if counsel-mode
+        (progn
+          (when (and (fboundp 'advice-add)
+                     counsel-mode-override-describe-bindings)
+            (advice-add #'describe-bindings :override #'counsel-descbinds))
+          (define-key minibuffer-local-map (kbd "C-r")
+            'counsel-minibuffer-history))
+      (when (fboundp 'advice-remove)
+        (advice-remove #'describe-bindings #'counsel-descbinds))))
 
-    :init
+  :init
 
-    (counsel-mode +1)
+  (counsel-mode +1)
 
-    :bind* (("C-c k" . counsel-rg)
-            ("s-x" . counsel-M-x))
-    :config/el-patch
+  :bind* (;; Keybinding suggested by the documentation of Counsel, see
+          ;; https://github.com/abo-abo/swiper.
+          ("C-c k" . counsel-rg)
+          ("s-x" . counsel-M-x))
+  :config/el-patch
 
-    (defcustom counsel-rg-base-command
-      (el-patch-concat
-        "rg -S --no-heading --line-number --color never "
-        (el-patch-add
-          "-z --sort path ")
-        "%s .")
-      (el-patch-concat
-        "Alternative to `counsel-ag-base-command' using ripgrep.
+  (defcustom counsel-rg-base-command
+    (el-patch-concat
+      "rg -S --no-heading --line-number --color never "
+      (el-patch-add
+        "-z --sort path ")
+      "%s .")
+    (el-patch-concat
+      "Alternative to `counsel-ag-base-command' using ripgrep.
 Note: don't use single quotes for the regex."
-        (el-patch-add
-          "\n\nSupport for searching compressed files and for
+      (el-patch-add
+        "\n\nSupport for searching compressed files and for
 reporting results in a deterministic order has been added by
 `el-patch'."))
-      :type 'string
-      :group 'ivy))
+    :type 'string
+    :group 'ivy)
 
-  (use-package counsel-projectile
-    :after projectile
-    :config
-    (counsel-projectile-mode 1))
-
-  (setq projectile-completion-system 'ivy))
-
-(use-package smex
-  :config
-  (smex-initialize))
+  :blackout t)
 
 (use-package prescient
-  :config (prescient-persist-mode t))
+  :config
+
+  ;; Remember usage statistics across Emacs sessions.
+  (prescient-persist-mode +1))
 
 (use-package ivy-prescient
+  :demand t
   :after ivy
-  :config (ivy-prescient-mode t))
+  :config
 
-(use-package flx)
+  ;; Use `prescient' for Ivy menus.
+  (ivy-prescient-mode +1))
+
+(use-feature isearch
+  :config
+
+  ;; Eliminate the 0.25s idle delay for isearch highlighting, as in my
+  ;; opinion it usually produces a rather disjointed and distracting
+  ;; UX.
+  (setq isearch-lazy-highlight-initial-delay 0))
+
+(use-package swiper
+  :bind (("C-s" . swiper)
+         ("C-r" . swiper))
+  :config
+
+  ;; Use only one color for subgroups in Swiper highlighting.
+  (setq swiper-faces '(swiper-match-face-1
+                       swiper-match-face-2
+                       swiper-match-face-2
+                       swiper-match-face-2)))
+
 
 (use-package avy
-  :bind (("C-c C-SPC" . avy-goto-char)))
+  :bind (("C-=" . avy-goto-char)))
 
 (use-package ace-window
   :bind (("C-x o" . ace-window)))
+
+(use-package snails
+  :straight (:host github :repo "manateelazycat/snails")
+  :demand t)
 
 ;; ========================
 ;; VERSION CONTROL WITH GIT
@@ -739,18 +774,18 @@ reporting results in a deterministic order has been added by
                ;; Last resort: use current window
                ('(display-buffer-same-window))))))
 
-  ;; (defun +magit-display-popup-buffer (buffer &optional alist)
-  ;;   "TODO"
-  ;;   (cond ((eq (window-dedicated-p) 'side)
-  ;;          (if (fboundp '+popup-display-buffer-stacked-side-window)
-  ;;              (+popup-display-buffer-stacked-side-window buffer alist)
-  ;;            (display-buffer-in-side-window buffer alist)))
-  ;;         ((derived-mode-p 'magit-mode)
-  ;;          (display-buffer-below-selected buffer alist))
-  ;;         ((display-buffer-in-side-window buffer alist))))
+  (defun +magit-display-popup-buffer (buffer &optional alist)
+    "TODO"
+    (cond ((eq (window-dedicated-p) 'side)
+           (if (fboundp '+popup-display-buffer-stacked-side-window)
+               (+popup-display-buffer-stacked-side-window buffer alist)
+             (display-buffer-in-side-window buffer alist)))
+          ((derived-mode-p 'magit-mode)
+           (display-buffer-below-selected buffer alist))
+          ((display-buffer-in-side-window buffer alist))))
 
   (setq magit-display-buffer-function #'+magit-display-buffer)
-  ;; (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
+  (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
 
   (defun enforce-git-commit-conventions ()
     "See https://chris.beams.io/posts/git-commit/"
@@ -777,46 +812,47 @@ reporting results in a deterministic order has been added by
   (set-face-foreground 'git-gutter:added "green4")
   (set-face-foreground 'git-gutter:deleted "red"))
 
+(use-package git-link)
+
 ;; ===============
 ;; CODE COMPLETION
 
 (use-package company
+  :defer 3
   :custom
-  (company-idle-delay 0.2)
+  (company-idle-delay 0)
   (company-global-modes '(not org-mode))
   (company-minimum-prefix-length 2)
   (company-tooltip-align-annotations t)
-  (company-tooltip-limit 20)
+  (company-tooltip-limit 70)
   (company-echo-delay 0)
   (company-tooltip-flip-when-above t)
   (company-require-match nil)
   (company-minimum-prefix-length 2)
-  (company-show-numbers t)
+  (compan-show-numbers t)
   (company-occurrence-weight-function #'company-occurrence-prefer-any-closest)
   (company-transformers '(company-sort-prefer-same-case-prefix))
-  (company-dabbrev-minimum-length 2)
+  (company-dabbrev-minimum-length 0)
   (company-dabbrev-code-modes t)
   (company-dabbrev-code-everywhere t)
-  :bind
-  ([remap completion-at-point] . company-manual-begin)
-  ([remap complete-symbol] . company-manual-begin)
-  :init
-  (global-company-mode t)
+
+  ;; :bind
+  ;; ([remap completion-at-point] . company-manual-begin)
+  ;; ([remap complete-symbol] . company-manual-begin)
+
+  :config
+  (company-tng-configure-default)
+  (setq company-frontends
+        '(company-tng-frontend
+          company-pseudo-tooltip-frontend
+          company-echo-metadata-frontend))
+
+  (global-company-mode +1)
+
   (setq company-continue-commands
         (append company-continue-commands
                 '(comint-previous-matching-input-from-input
                   comint-next-matching-input-from-input))))
-
-(use-package company-flx
-  :disabled t
-  :after company
-  :config
-  (company-flx-mode t)
-  (setq company-flx-limit 100))
-
-(use-package company-posframe
-  :after company
-  :config (company-posframe-mode t))
 
 (use-package company-quickhelp
   :after company
@@ -824,8 +860,29 @@ reporting results in a deterministic order has been added by
   (define-key company-active-map (kbd "C-c h") #'company-quickhelp-manual-begin)
   (company-quickhelp-mode t))
 
+;; Package `company-prescient' provides intelligent sorting and
+;; filtering for candidates in Company completions.
 (use-package company-prescient
-  :config (company-prescient-mode t))
+  :disabled t
+  :demand t
+  :after company
+  :config
+
+  ;; Use `prescient' for Company menus.
+  (company-prescient-mode +1))
+
+(use-package company-box
+  :disabled t
+  :hook (company-mode . company-box-mode)
+  :config
+  (setq company-box-show-single-candidate t
+        company-box-backends-colors nil
+        company-box-max-candidates 50)
+
+  (defun +func1 (test)
+    (string " "))
+
+  (setq company-box-icons-functions '(+func1)))
 
 (defvar he-search-loc-backward (make-marker))
 (defvar he-search-loc-forward (make-marker))
@@ -998,7 +1055,12 @@ string).  It returns t if a new completion is found, nil otherwise."
 
 (global-set-key (kbd "C-.") 'hippie-expand-no-case-fold)
 (global-set-key (kbd "C-:") 'hippie-expand-lines)
-(global-set-key (kbd "C-,") 'completion-at-point)
+(global-set-key (kbd "C-,") 'hippie-expand-try-functions-list)
+
+(use-package eacl
+  :ensure nil
+  :straight (:host github :repo "redguardtoo/eacl")
+  :demand t)
 
 ;; ===========
 ;; PROGRAMMING
@@ -1036,12 +1098,10 @@ string).  It returns t if a new completion is found, nil otherwise."
   (setq emmet-indentation 2)
   (setq emmet-move-cursor-between-quotes t))
 
-;; ========
-;; ORG MODE
-
 (defvar org-folder "~/Sync/org")
 
 (use-package org
+  :disabled t
   :demand t
   :mode (("\\.org$" . org-mode))
   :bind (("C-c l" . org-store-link)
@@ -1056,9 +1116,9 @@ string).  It returns t if a new completion is found, nil otherwise."
   (setq org-src-fontify-natively t)     ;; Code highlighting in code blocks
   (setq org-log-done 'time)             ;; Add closed date when todo goes to DONE state
   (setq org-support-shift-select t)     ;; Allow shift selection with arrows.
-  (setq org-directory org-folder
+  (setq org-directory "~/Sync/org"
         org-default-notes-file (concat org-folder "/todo.org"))
-  (setq org-agenda-files '(org-folder))
+  (setq org-agenda-files '("~/Sync/org"))
 
   (setq org-capture-templates
         '(("t" "Todo" entry (file+headline (lambda () (concat org-folder "/todo.org")) "Todo")
@@ -1077,7 +1137,7 @@ string).  It returns t if a new completion is found, nil otherwise."
            "* %^{book name} by %^{author} %^g")))
 
   (use-package org-projectile
-    :bind ("C-c n p" . org-projectile-project-todo-completing-read)
+    ;; :bind ("C-c n p" . org-projectile-project-todo-completing-read)
     :config
     (setq org-projectile-projects-file "~/Sync/org/project_todos.org")
     (setq org-agenda-files (append org-agenda-files (org-projectile-todo-files))))
@@ -1104,7 +1164,8 @@ string).  It returns t if a new completion is found, nil otherwise."
         evil-visual-state-cursor 'box
         evil-motion-state-cursor 'box
         evil-replace-state-cursor 'box
-        evil-operator-state-cursor 'box)
+        evil-operator-state-cursor 'box
+        evil-emacs-state-cursor 'box)
 
   :config
   (defadvice evil-scroll-page-down
@@ -1155,21 +1216,29 @@ string).  It returns t if a new completion is found, nil otherwise."
   (global-set-key (kbd "C-c s") 'company-yasnippet))
 
 (use-package flycheck
+  :disabled t
   :config
   (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
-  ;; (setq flycheck-ruby-rubocop-executable "/Users/miguelsantos/.rbenv/versions/2.3.7/lib/ruby/gems/2.3.0/gems/rubocop-0.46.0/bin/rubocop")
-  (global-flycheck-mode 1)
+  ;; (setq flycheck-ruby-rubocop-executable "bundle exec rubocop")
+
+  (global-flycheck-mode +1)
+
   (setq flycheck-indication-mode 'left-fringe)
   ;; A non-descript, left-pointing arrow
+
   (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
     [16 48 112 240 112 48 16] nil nil 'center)
+
   (use-package flycheck-posframe
     :config
     (flycheck-posframe-mode 1)))
 
 (use-package dumb-jump
+  :demand t
   :bind* (("C-M-d" . dumb-jump-quick-look)
-          ([remap evil-jump-to-tag] . dumb-jump-go)))
+          ([remap evil-jump-to-tag] . dumb-jump-go))
+  :config
+  (setq dumb-jump-selector 'ivy))
 
 (use-package lsp-mode
   :config
@@ -1191,11 +1260,11 @@ string).  It returns t if a new completion is found, nil otherwise."
 
 (use-package coffee-mode
   :mode "\\.coffee\\.*"
-  :custom
-  (coffee-args-repl '("-i" "--nodejs"))
-  (coffee-tab-width 2)
-  (coffee-indent-like-python-mode t)
   :config
+  (setq coffee-args-repl '("-i" "--nodejs"))
+  (setq coffee-tab-width 2)
+  (setq coffee-indent-like-python-mode t)
+
   (add-to-list 'indent-sensitive-modes '(coffee-mode)))
 
 (use-package js
@@ -1229,8 +1298,8 @@ string).  It returns t if a new completion is found, nil otherwise."
 (use-package nodejs-repl
   :defer t)
 
-(use-package rjsx-mode
-  :after js2-mode)
+;; (use-package rjsx-mode
+;;   :after js2-mode)
 
 (use-package json-mode
   :mode (("\\.bowerrc$"     . json-mode)
@@ -1242,12 +1311,23 @@ string).  It returns t if a new completion is found, nil otherwise."
   :mode
   (("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode))
   :interpreter "ruby"
+  :bind (("C-c C-d" . #'+ruby-add-debug-line))
   :config
   (setq ruby-indent-level 2
         ruby-indent-tabs-mode nil)
 
   (setq ruby-insert-encoding-magic-comment nil)
   (setq enh-ruby-add-encoding-comment-on-save nil)
+
+  (subword-mode -1)
+
+  (defun +ruby-add-debug-line ()
+    (interactive)
+    (save-excursion
+      (end-of-line)
+      (smart-open-line)
+      (insert "binding.pry")
+      (indent-according-to-mode)))
 
   (defun hippie-expand-ruby-symbols (orig-fun &rest args)
     (if (eq major-mode 'ruby-mode)
@@ -1280,15 +1360,16 @@ environment variables."
             +ruby-current-version version-str)
       (when (member version-str +ruby-rbenv-versions)
         (setenv "RBENV_VERSION" version-str))))
-  (add-hook 'enh-ruby-mode-hook #'+detect-rbenv-version)
+  (add-hook 'ruby-mode-hook #'+detect-rbenv-version)
   (global-rbenv-mode 1))
 
 (use-package robe
   :hook (ruby-mode . robe-mode)
-  :bind (([remap evil-jump-to-tag] . robe-jump))
+  :bind (([remap evil-jump-to-tag] . robe-jump)
+         ("C-c C-h" . robe-doc))
   :config
-  (after company
-    (push 'company-robe company-backends)))
+  (eval-after-load 'company
+    '(push 'company-robe company-backends)))
 
 (use-package rspec-mode
   :after ruby-mode
@@ -1328,6 +1409,8 @@ Name is relative to the project root.")
                  "'\n")))))
   (global-set-key (kbd "C-c M-j") #'+run-ruby-console))
 
+(use-package yari)
+
 ;; (use-package projectile-rails
 ;;   :after projectile
 ;;   :config
@@ -1336,11 +1419,11 @@ Name is relative to the project root.")
 
 (use-package feature-mode
   :bind (("C-c C-p" . #'+cycle-selenium-phantomjs)
-         ("C-c C-d" . #'+add-debug-line))
+         ("C-c C-d" . #'+feature-add-debug-line))
   :mode "\\.feature$"
   :config
 
-  (defun +add-debug-line ()
+  (defun +feature-add-debug-line ()
     (interactive)
     (save-excursion
       (end-of-line)
@@ -1365,6 +1448,20 @@ Name is relative to the project root.")
 (use-package haml-mode
   :mode "\\.haml$")
 
+(use-package go-mode)
+(use-package go-eldoc)
+(use-package go-guru)
+(use-package gorepl-mode)
+(use-package company-go
+  :after go-mode
+  :config
+  (setq company-go-show-annotation t)
+  (eval-after-load 'company
+    '(push 'company-go company-backends)))
+
+(use-package kotlin-mode)
+
+(executable-find company-go-gocode-command)
 (defun copy-buffer-file-name ()
   "Copy buffer's full path."
   (interactive)
@@ -1392,6 +1489,11 @@ Name is relative to the project root.")
   (global-set-key (kbd "C-c C") 'string-inflection-camelcase)
   (global-set-key (kbd "C-c L") 'string-inflection-lower-camelcase)
   (global-set-key (kbd "C-c J") 'string-inflection-java-style-cycle))
+
+(use-package keyfreq
+  :config
+  (keyfreq-mode +1)
+  (keyfreq-autosave-mode +1))
 
 (use-package dash
   :config
@@ -1552,7 +1654,7 @@ region-end is used."
               (insert new-quotes)
               (move-point-backward-out-of-string)
               (delete-char 1)
-              (insert new-quotes)
+              (insert new-quotes)a
               (set-marker start (point))
               (replace-string new-quotes (concat "\\" new-quotes) nil start end)
               (replace-string (concat "\\" old-quotes) old-quotes nil start end)))
@@ -1678,8 +1780,56 @@ region-end is used."
       (let* ((beg (region-beginning))
              (end (region-end))
              (current-word (buffer-substring-no-properties beg end))
-             (snakified (snake-case current-word)))
+             (snakified (s-snake-case current-word)))
         (replace-string current-word snakified nil beg end)))
+
+    (defun camelcase-region (start end)
+      "Changes region from snake_case to camelCase"
+      (interactive "r")
+      (save-restriction (narrow-to-region start end)
+                        (goto-char (point-min))
+                        (while (re-search-forward "_\\(.\\)" nil t)
+                          (replace-match (upcase (match-string 1))))))
+
+    ;; ----------------------------------------------------------------------
+    ;; cadged largely from http://xahlee.org/emacs/elisp_idioms.html:
+    ;;
+    (defun camelcase-word-or-region ()
+      "Changes word or region from snake_case to camelCase"
+      (interactive)
+      (let (pos1 pos2 bds)
+        (if (and transient-mark-mode mark-active)
+            (setq pos1 (region-beginning) pos2 (region-end))
+          (progn
+            (setq bds (bounds-of-thing-at-point 'symbol))
+            (setq pos1 (car bds) pos2 (cdr bds))))
+        (camelcase-region pos1 pos2)))
+
+    ;; ----------------------------------------------------------------------
+    ;; snakecase-region
+    ;; Given a region of text in camelCase format, changes it to snake_case.
+    ;;
+    ;; BUG: This is actually just a repeat of camelcase-region!
+    (defun snakecase-region (start end)
+      "Changes region from camelCase to snake_case"
+      (interactive "r")
+      (save-restriction (narrow-to-region start end)
+                        (goto-char (point-min))
+                        (while (re-search-forward "_\\(.\\)" nil t)
+                          (replace-match (upcase (match-string 1))))))
+
+    ;; ----------------------------------------------------------------------
+    ;; Given a region of text in camelCase format, changes it to snake_case.
+    (defun snakecase-word-or-region ()
+      "Changes word or region from camelCase to snake_case"
+      (interactive)
+      (let (pos1 pos2 bds)
+        (if (and transient-mark-mode mark-active)
+            (setq pos1 (region-beginning) pos2 (region-end))
+          (progn
+            (setq bds (bounds-of-thing-at-point 'symbol))
+            (setq pos1 (car bds) pos2 (cdr bds))))
+        (snakecase-region pos1 pos2)))
 
     (defun kebab-current-word ()
       (interactive)
@@ -1752,15 +1902,27 @@ region-end is used."
         (join-line)
         (indent-according-to-mode)))
 
-    (defun newline-anywhere ()
-      "Add a newline from anywhere in the line."
-      (interactive)
-      (end-of-line)
-      (newline-and-indent))
-
-    (global-set-key (kbd "M-RET") 'newline-anywhere)
-
     (global-set-key (kbd "C-M-j") #'+join-line-indent)
     (global-set-key (kbd "C-w") 'kill-region-or-backward-word)
-    (global-set-key (kbd "C-c C-j") 'duplicate-current-line-or-region)
-    (global-set-key (kbd "C-c C--") 'replace-next-underscore-with-camel)))
+    (global-set-key (kbd "C-c C--") 'camelcase-word-or-region)
+    (global-set-key (kbd "C-c C-_") 'snakecase-word-or-region)))
+
+(use-package restclient)
+
+(use-package yaml-mode)
+(use-package ag)
+(use-package editorconfig)
+
+(global-set-key (kbd "C-+") 'text-scale-increase)
+(global-set-key (kbd "C--") 'text-scale-decrease)
+
+;; (use-package centaur-tabs
+;;   :config
+;;   (centaur-tabs-mode t)
+;;   :bind
+;;   ("C-<prior>" . centaur-tabs-backward)
+;;   ("C-<next>" . centaur-tabs-forward))
+
+(use-package scala-mode
+  :interpreter
+    ("scala" . scala-mode))
