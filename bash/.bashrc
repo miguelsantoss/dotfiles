@@ -1,9 +1,20 @@
-eval "$(rbenv init -)"
+export GOPATH=~/Projects/go
+export PYENV_ROOT="$HOME/.pyenv"
 
 export PATH="/usr/local/opt/imagemagick@6/bin:$PATH"
-export PATH=$HOME/bin:$HOME/.fnm:$HOME/.rbenv/bin:$HOME/Library/Python/3.7/bin:$PATH
 
-eval "`fnm env --multi`"
+export PATH="$PYENV_ROOT/bin:$PATH"
+export PATH=$PATH:$HOME/bin
+export PATH=$PATH:$HOME/.rbenv/bin
+export PATH=$PATH:$HOME/.fnm
+export PATH=$PATH:$HOME/Library/Python/3.7/bin
+export PATH=$PATH:$(go env GOPATH)/bin
+
+export RUBY_CONFIGURE_OPTS=--with-jemalloc
+
+eval "$(fnm env --multi)"
+eval "$(rbenv init -)"
+eval "$(pyenv init -)"
 
 # ls custom colors
 export LSCOLORS=ExFxBxDxCxegedabagacad
@@ -127,7 +138,6 @@ alias agg="ag --color --color-line-number '0;35' --color-match '46;30' --color-p
 alias tree='tree -CAFa -I="CVS|*.*.package|.svn|.git|.hg|node_modules|bower_components" --dirsfirst'
 
 alias k="kak"
-alias vim='nvim'
 alias v='nvim'
 alias e="emacsclient -c"
 alias setclip="xclip -selection c"
@@ -140,6 +150,7 @@ alias mg="bundle exec rake db:migrate"
 alias mt="RAILS_ENV=test bundle exec rake db:drop && RAILS_ENV=test bundle exec rake db:create && RAILS_ENV=test bundle exec rake db:migrate"
 
 alias c="RAILS_ENV=test bundle exec cucumber -p circle"
+alias cb="RAILS_ENV=test IN_BROWSER=selenium_chrome bundle exec cucumber -p circle"
 alias cs="RAILS_ENV=test SKIP_WEBPACK_IN_TESTS=true bundle exec cucumber -p circle"
 alias cf="RAILS_ENV=test FORCE_WEBPACK_BUILD=true bundle exec cucumber -p circle"
 
@@ -183,6 +194,11 @@ export PURPLE
 export BOLD
 export RESET
 
+inputcolor="\033[0;37m"
+cwdcolor="\033[0;34m"
+host_name="\033[1;31m"
+branchcolor="\033[0;36m"
+
 # Git branch details
 function parse_git_dirty() {
 	[[ $(git status 2> /dev/null | tail -n1) != *"working directory clean"* ]] && echo "*"
@@ -193,8 +209,8 @@ function parse_git_branch() {
 }
 
 export PS1="\[${MAGENTA}\]\u \[$RESET\]in \[$GREEN\]\w\[$RESET\]\$([[ -n \$(git branch 2> /dev/null) ]] && echo \" on \")\[$PURPLE\]\$(parse_git_branch)\[$RESET\] "
-export PS1="\[${MAGENTA}\] λ \[$RESET\]\[$GREEN\]\w\[$RESET\]\[$PURPLE\]\$(parse_git_branch)\[$RESET\] "
-
+export PS1="\[${host_name}\] λ \[$RESET\]\[$cwdcolor\]\w\[$RESET\]\[$branchcolor\]\$(parse_git_branch)\[$RESET\] "
+export PS1="\[$cwdcolor\]\w\[$RESET\]\[$branchcolor\]\$(parse_git_branch)\[$RESET\] "
 
 ### Misc
 

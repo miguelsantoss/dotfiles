@@ -190,7 +190,7 @@ decrease this. If you experience stuttering, increase this.")
 (when *is-linux* (menu-bar-mode -1))
 (tool-bar-mode -1)
 (scroll-bar-mode -1)
-(blink-cursor-mode +1)
+(blink-cursor-mode -1)
 
 ;; mode line settings
 (line-number-mode t)
@@ -234,24 +234,30 @@ decrease this. If you experience stuttering, increase this.")
   "Disable active themes before loading the new theme."
   (+disable-themes))
 
-;; (use-package brutalist-theme
+;; (load-theme 'tsdh-light t)
+
+;; (use-package leuven-theme
 ;;   :config
-;;   (load-theme 'brutalist t))
+;;   (load-theme 'leuven t))
 
-(load-theme 'tsdh-light t)
-
-(use-package leuven-theme
+;; (use-package solarized-theme)
+(use-package doom-themes
   :config
-  (load-theme 'leuven t))
+  (load-theme 'doom-one-light t))
+;; (use-package spacemacs-theme
+;;   :defer t
+;;   :init
+;;   (load-theme 'spacemacs-light t))
 
 (fringe-mode '(2 . 2))
 
-(setq +font "IBM Plex Mono 14")
-(setq +font "Go Mono 14")
-(setq +font "Consolas 15")
-(setq +font "Menlo 14")
-(setq +font "Roboto Mono 14")
 (setq +font "Fira Code Retina 14")
+(setq +font "IBM Plex Mono 14")
+(setq +font "Menlo 12")
+(setq +font "DejaVu Sans Mono 14")
+(setq +font "Roboto Mono 14")
+(setq +font "Input Condensed 14")
+(setq +font "Cascadia Mono PL 14")
 
 (let ((font +font))
   (set-frame-font font)
