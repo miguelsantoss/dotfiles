@@ -1,11 +1,18 @@
 set fish_greeting ""
 
-set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin $PATH
+set -x -U GOPATH $HOME/go
+
+set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin (go env GOPATH)/bin /usr/local/opt/imagemagick@5/bin $PATH
+
+set -x -U OBJC_DISABLE_INITIALIZE_FORK_SAFETY YES
+set -x -U RUBY_CONFIGURE_OPTS --with-jemalloc
 
 alias ls "ls -hF"
 alias ll "ls -lahF"
+
 alias "cd.." "cd ../"
 alias mkdir "mkdir -p"
+
 alias ga "git add"
 alias gc "git commit -m"
 alias gs "git status"
@@ -15,36 +22,33 @@ alias gm "git merge"
 alias gr "git rebase"
 alias gp "git push"
 alias gu "git unstage"
-alias gg "git graph"
 alias gco "git checkout"
-alias gcs "git commit -S -m"
 alias gpr "hub pull-request"
-alias agg "ag --color --color-line-number '0;35' --color-match '46;30' --color-path '4;36'"
-alias tree 'tree -CAFa -I "CVS|*.*.package|.svn|.git|.hg|node_modules|bower_components" --dirsfirst'
-alias magit 'emacsclient -c -n -e "(progn (magit-status) (delete-other-windows))"'
 
-alias k "kak"
 alias v "nvim"
-alias e "emacsclient -c"
 alias setclip "xclip -selection c"
 alias getclip "xclip -selection c -o"
 alias ctags (brew --prefix)"/bin/ctags"
-alias gss "git-fshow"
+
 alias be "bundle exec"
-alias rs "bundle exec rails server"
-alias rc "bundle exec rails console"
 alias mg "bundle exec rake db:migrate"
-alias mt "env RAILS_ENV=test bundle exec rake db:drop && env RAILS_ENV=test bundle exec rake db:create && env RAILS_ENV=test bundle exec rake db:migrate"
-alias krs "kill -9 "(ps aux | rg 'rails server' | head -n 1 | awk '{print $2}')
+alias mt "env RAILS_ENV=test bundle exec rake db:drop db:create db:migrate"
 
 alias c "env RAILS_ENV=test bundle exec cucumber -p circle"
 alias cs "env RAILS_ENV=test env SKIP_WEBPACK_IN_TESTS=true bundle exec cucumber -p circle"
 alias cf "env RAILS_ENV=test env FORCE_WEBPACK_BUILD=true bundle exec cucumber -p circle"
+alias cb "env IN_BROWSER=selenium_chrome env RAILS_ENV=test bundle exec cucumber -p circle"
 
-alias did "vim +'normal Go' +'r!date' ~/did.txt"
+alias dc "docker-compose"
 
 if type -q rbenv
   status --is-interactive; and source (rbenv init -|psub)
+
+  set -gx PATH ~/.rbenv/bin $PATH
+end
+
+if type -q fnm
+  fnm env --multi | source
 end
 
 if type -q fasd

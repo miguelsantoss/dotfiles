@@ -241,23 +241,39 @@ decrease this. If you experience stuttering, increase this.")
 ;;   (load-theme 'leuven t))
 
 ;; (use-package solarized-theme)
+
 (use-package doom-themes
   :config
   (load-theme 'doom-one-light t))
+
 ;; (use-package spacemacs-theme
 ;;   :defer t
 ;;   :init
 ;;   (load-theme 'spacemacs-light t))
 
+(use-package plan9-theme
+  :config
+  (load-theme 'plan9 t))
+
 (fringe-mode '(2 . 2))
 
-(setq +font "Fira Code Retina 14")
+;; (load-theme 'acme t)
+
+(when *is-mac*
+  ;; Render thinner fonts
+  (setq ns-use-thin-smoothing nil)
+  ;; Don't open a file in a new frame
+  (setq ns-pop-up-frames nil))
+
 (setq +font "IBM Plex Mono 14")
-(setq +font "Menlo 12")
+(setq +font "Cascadia Mono PL 14")
+(setq +font "NotoSansMono Nerd Font Medium 14")
+(setq +font "Dank Mono 14")
 (setq +font "DejaVu Sans Mono 14")
 (setq +font "Roboto Mono 14")
-(setq +font "Input Condensed 14")
-(setq +font "Cascadia Mono PL 14")
+(setq +font "Fira Code 14")
+(setq +font "SF Mono 13")
+(setq +font "Monaco 13")
 
 (let ((font +font))
   (set-frame-font font)
@@ -1165,13 +1181,14 @@ string).  It returns t if a new completion is found, nil otherwise."
 
 (use-package evil
   :init
-  (setq evil-normal-state-cursor 'box
-        evil-insert-state-cursor 'box
-        evil-visual-state-cursor 'box
-        evil-motion-state-cursor 'box
-        evil-replace-state-cursor 'box
-        evil-operator-state-cursor 'box
-        evil-emacs-state-cursor 'box)
+
+  ;; (setq evil-normal-state-cursor 'box
+  ;;       evil-insert-state-cursor 'box
+  ;;       evil-visual-state-cursor 'box
+  ;;       evil-motion-state-cursor 'box
+  ;;       evil-replace-state-cursor 'box
+  ;;       evil-operator-state-cursor 'box
+  ;;       evil-emacs-state-cursor 'box)
 
   :config
   (defadvice evil-scroll-page-down
@@ -1932,3 +1949,6 @@ region-end is used."
 (use-package scala-mode
   :interpreter
     ("scala" . scala-mode))
+
+(use-package rustic
+  :mode ("\\.rs$" . rustic-mode))
