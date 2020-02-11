@@ -1,11 +1,14 @@
 set fish_greeting ""
 
-set -x -U GOPATH $HOME/go
-
-set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin (go env GOPATH)/bin /usr/local/opt/imagemagick@5/bin $PATH
+set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin /usr/local/opt/imagemagick@5/bin $PATH
 
 set -x -U OBJC_DISABLE_INITIALIZE_FORK_SAFETY YES
 set -x -U RUBY_CONFIGURE_OPTS --with-jemalloc
+
+if type -q go
+  set -gx PATH (go env GOPATH)/bin $PATH
+  set -x -U GOPATH $HOME/go
+end
 
 alias ls "ls -hF"
 alias ll "ls -lahF"
@@ -28,7 +31,6 @@ alias gpr "hub pull-request"
 alias v "nvim"
 alias setclip "xclip -selection c"
 alias getclip "xclip -selection c -o"
-alias ctags (brew --prefix)"/bin/ctags"
 
 alias be "bundle exec"
 alias mg "bundle exec rake db:migrate"
