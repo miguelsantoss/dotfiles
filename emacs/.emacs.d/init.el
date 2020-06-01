@@ -1,9 +1,46 @@
-;;; -*- lexical-binding: t -*-
+;; -*- lexical-binding: t -*-
 
 ;; ====
 ;; INIT
 
-;;; Code:
+;;; Load built-in utility libraries
+
+(require 'cl-lib)
+(require 'map)
+(require 'subr-x)
+
+(defmacro def (name &rest body)
+  (declare (indent 1) (debug t))
+  `(defun ,name (&optional _arg)
+     ,(if (stringp (car body)) (car body))
+     (interactive "p")
+     ,@(if (stringp (car body)) (cdr `,body) body)))
+
+(defmacro λ (&rest body)
+  (declare (indent 1) (debug t))
+  `(lambda ()
+     (interactive)
+     ,@body))
+
+(defmacro add-λ (hook &rest body)
+  (declare (indent 1) (debug t))
+  `(add-hook ,hook (lambda () ,@body)))
+
+(defmacro after (feature &rest forms)
+  (declare (indent 1) (debug t))
+  `(,(if (or (not (bound-and-true-p byte-compile-current-file))
+             (if (symbolp feature)
+                 (require feature nil :no-error)
+               (load feature :no-message :no-error)))
+         #'progn
+       #'with-no-warnings)
+    (with-eval-after-load ',feature ,@forms)))
+
+(defmacro use-feature (name &rest args)
+  (declare (indent 1))
+  `(use-package ,name
+     :straight nil
+,@args))
 
 (setq +original-gc-cons-threshold gc-cons-threshold)
 
@@ -27,12 +64,30 @@ decrease this. If you experience stuttering, increase this.")
 (defvar *is-mac* (eq system-type 'darwin))
 (defvar *is-linux* (eq system-type 'gnu/linux))
 
-;; Use the develop branch of straight.el
-(setq straight-repository-branch "develop")
+;; Feature `gnutls' provides support for SSL/TLS connections, using
+;; the GnuTLS library.
+(with-eval-after-load 'gnutls
 
+  ;; `use-package' does this for us normally.
+  (eval-when-compile
+    (require 'gnutls))
+
+  ;; Do not allow insecure TLS connections.
+  (setq gnutls-verify-error t)
+
+  ;; Bump the required security level for TLS to an acceptably modern
+  ;; value.
+  (setq gnutls-min-prime-bits 3072))
+
+;; Clear out recipe overrides (in case of re-init).
+(setq straight-recipe-overrides nil)
+
+;; Bootstrap the package manager, straight.el.
+(defvar bootstrap-version)
 (let ((bootstrap-file
-       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
-      (bootstrap-version 4))
+       (expand-file-name
+        "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
   (unless (file-exists-p bootstrap-file)
     (with-current-buffer
         (url-retrieve-synchronously
@@ -42,38 +97,75 @@ decrease this. If you experience stuttering, increase this.")
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
+;;;; use-package
+
+;; Package `use-package' provides a handy macro by the same name which
+;; is essentially a wrapper around `with-eval-after-load' with a lot
+;; of handy syntactic sugar and useful features.
 (straight-use-package 'use-package)
 
+;; When configuring a feature with `use-package', also tell
+;; straight.el to install a package of the same name, unless otherwise
+;; specified using the `:straight' keyword.
 (setq straight-use-package-by-default t)
 
+;; Tell `use-package' to always load features lazily unless told
+;; otherwise. It's nicer to have this kind of thing be deterministic:
+;; if `:demand' is present, the loading is eager; otherwise, the
+;; loading is lazy. See
+;; https://github.com/jwiegley/use-package#notes-about-lazy-loading.
+(setq use-package-always-defer t)
+
+(defmacro use-feature (name &rest args)
+  "Like `use-package', but with `straight-use-package-by-default' disabled.
+NAME and ARGS are as in `use-package'."
+  (declare (indent defun))
+  `(use-package ,name
+     :straight nil
+     ,@args))
+
+;; Package `blackout' provides a convenient function for customizing
+;; mode lighters. It supports both major and minor modes with the same
+;; interface, and includes `use-package' integration. The features are
+;; a strict superset of those provided by similar packages `diminish',
+;; `delight', and `dim'.
 (use-package blackout
   :straight (:host github :repo "raxod502/blackout")
   :demand t)
 
+;;;; straight.el configuration
+
+;; Feature `straight-x' from package `straight' provides
+;; experimental/unstable extensions to straight.el which are not yet
+;; ready for official inclusion.
 (use-feature straight-x
   ;; Add an autoload for this extremely useful command.
   :commands (straight-x-fetch-all))
 
+;;; Configure ~/.emacs.d paths
+
+;; Package `no-littering' changes the default paths for lots of
+;; different packages, with the net result that the ~/.emacs.d folder
+;; is much more clean and organized.
 (use-package no-littering
   :demand t)
 
-;; (straight-use-package 'org)
+;;; Prevent Emacs-provided Org from being loaded
+(straight-use-package
+ '(org :host github :repo "emacs-straight/org-mode" :local-repo "org"))
 
-(use-package el-patch
-  :straight (:host github
-                   :repo "raxod502/el-patch"
-                   :branch "develop")
-  :demand t)
+;;; el-patch
 
-;; TODO: remove
-;; (setq use-package-always-ensure t)
+;; Package `el-patch' provides a way to override the definition of an
+;; internal function from another package by providing an s-expression
+;; based diff which can later be validated to ensure that the upstream
+;; definition has not changed.
+(use-package el-patch)
 
-(use-package s)
-(use-package restart-emacs)
-
-(use-feature server
-  :init
-  (if (not (server-running-p)) (server-start)))
+;; Only needed at compile time, thanks to Jon
+;; <https://github.com/raxod502/el-patch/pull/11>.
+(eval-when-compile
+  (require 'el-patch))
 
 (use-package exec-path-from-shell
   :config
@@ -95,288 +187,379 @@ decrease this. If you experience stuttering, increase this.")
 ;; remember risk variables (dir-locals)
 (defun risky-local-variable-p (sym &optional _ignored) nil)
 
-;; =============
-;; MODIFIER KEYS
+;;; Keybindings
 
-;; Both command keys are 'Super'
-(when *is-mac*
-  (setq mac-right-command-modifier 'super)
-  (setq mac-command-modifier 'super)
-  ;; Option or Alt is naturally 'Meta'
-  (setq mac-option-modifier 'meta)
-  ;; Right Alt (option) can be used to enter symbols like em dashes '—' and euros '€' and stuff.
-  (setq mac-right-option-modifier 'nil))
+;; Package `bind-key' provides a macro by the same name (along with
+;; `bind-key*' and `unbind-key') which provides a much prettier API
+;; for manipulating keymaps than `define-key' and `global-set-key' do.
+;; It's also the same API that `:bind' and similar keywords in
+;; `use-package' use.
+(use-package bind-key
+  :demand t)
 
+;; Package `which-key' displays the key bindings and associated
+;; commands following the currently-entered key prefix in a popup.
+(use-package which-key
+  :demand t
+  :config
 
-(setq initial-scratch-message nil)
-;; =============
-;; SANE DEFAULTS
+  ;; We configure it so that `which-key' is triggered by typing C-h
+  ;; during a key sequence (the usual way to show bindings). See
+  ;; <https://github.com/justbur/emacs-which-key#manual-activation>.
+  (setq which-key-show-early-on-C-h t)
+  (setq which-key-idle-delay most-positive-fixnum)
+  (setq which-key-idle-secondary-delay 1e-100)
 
-(setq default-directory "~/" )
+  (which-key-mode +1)
 
-;; Smoother and nicer scrolling
-(setq scroll-margin 0
-      scroll-step 0
-      next-line-add-newlines nil
-      scroll-conservatively 100000
-      scroll-preserve-screen-position 1)
+  :blackout t)
+
+;; If you have something on the system clipboard, and then kill
+;; something in Emacs, then by default whatever you had on the system
+;; clipboard is gone and there is no way to get it back. Setting the
+;; following option makes it so that when you kill something in Emacs,
+;; whatever was previously on the system clipboard is pushed into the
+;; kill ring. This way, you can paste it with `yank-pop'.
+(setq save-interprogram-paste-before-kill t)
+
+;;;; Mouse integration
+
+;; Scrolling is way too fast on macOS with Emacs 27 and on Linux in
+;; general. Decreasing the number of lines we scroll per mouse event
+;; improves the situation. Normally, holding shift allows this slower
+;; scrolling; instead, we make it so that holding shift accelerates
+;; the scrolling.
+(setq mouse-wheel-scroll-amount
+      '(1 ((shift) . 5) ((control))))
 
 (setq mouse-wheel-follow-mouse 't)
-(setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
 
-(when *is-linux*
-  (setq x-select-enable-primary nil
-        x-select-enable-clipboard t
-        interprogram-paste-function 'x-cut-buffer-or-selection-value))
+;; Allow doing a command that requires candidate-selection when you
+;; are already in the middle of candidate-selection. Sometimes it's
+;; handy!
+(setq enable-recursive-minibuffers t)
 
-(setq tab-always-indent 'complete)
+;; Package `selectrum' is an incremental completion and narrowing
+;; framework. Like Ivy and Helm, which it improves on, Selectrum
+;; provides a user interface for choosing from a list of options by
+;; typing a query to narrow the list, and then selecting one of the
+;; remaining candidates. This offers a significant improvement over
+;; the default Emacs interface for candidate selection.
+(use-package selectrum
+  :straight (:host github :repo "raxod502/selectrum")
+  :defer t
+  :init
 
-;; Don't bother with auto save and backups.
+  ;; This doesn't actually load Selectrum.
+  (selectrum-mode +1))
+
+;; Package `prescient' is a library for intelligent sorting and
+;; filtering in various contexts.
+(use-package prescient
+  :config
+
+  ;; Remember usage statistics across Emacs sessions.
+  (prescient-persist-mode +1)
+
+  ;; The default settings seem a little forgetful to me. Let's try
+  ;; this out.
+  (setq prescient-history-length 1000))
+
+;; Package `selectrum-prescient' provides intelligent sorting and
+;; filtering for candidates in Selectrum menus.
+(use-package selectrum-prescient
+  :straight (:host github :repo "raxod502/prescient.el"
+                   :files ("selectrum-prescient.el"))
+  :demand t
+  :after selectrum
+  :config
+
+  (selectrum-prescient-mode +1))
+
+;; This is rather radical, but saves from a lot of pain in the ass.
+;; When split is automatic, always split windows vertically
+(setq split-height-threshold 0)
+(setq split-width-threshold nil)
+
+;; Feature `windmove' provides keybindings S-left, S-right, S-up, and
+;; S-down to move between windows. This is much more convenient and
+;; efficient than using the default binding, C-x o, to cycle through
+;; all of them in an essentially unpredictable order.
+(use-feature windmove
+  :demand t
+  :config
+
+  (windmove-default-keybindings)
+
+  ;; Introduced in Emacs 27:
+
+  (when (fboundp 'windmove-display-default-keybindings)
+    (windmove-display-default-keybindings))
+
+  (when (fboundp 'windmove-delete-default-keybindings)
+    (windmove-delete-default-keybindings)))
+
+;; Feature `winner' provides an undo/redo stack for window
+;; configurations, with undo and redo being C-c left and C-c right,
+;; respectively. (Actually "redo" doesn't revert a single undo, but
+;; rather a whole sequence of them.) For instance, you can use C-x 1
+;; to focus on a particular window, then return to your previous
+;; layout with C-c left.
+(use-feature winner
+  :demand t
+  :config
+
+  (winner-mode +1))
+
+;; Package `transpose-frame' provides simple commands to mirror,
+;; rotate, and transpose Emacs windows: `flip-frame', `flop-frame',
+;; `transpose-frame', `rotate-frame-clockwise',
+;; `rotate-frame-anticlockwise', `rotate-frame'.
+(use-package transpose-frame)
+
+;; Package `buffer-move' provides simple commands to swap Emacs
+;; windows: `buf-move-up', `buf-move-down', `buf-move-left',
+;; `buf-move-right'.
+(use-package buffer-move)
+
+;; Feature `ibuffer' provides a more modern replacement for the
+;; `list-buffers' command.
+(use-feature ibuffer
+  :bind (([remap list-buffers] . #'ibuffer)))
+
+(use-package ace-window
+  :bind (("C-x o" . ace-window)))
+
+;; Follow symlinks when opening files
+(setq find-file-visit-truename t)
+
+;; Disable the warning "X and Y are the same file" which normally
+;; appears when you visit a symlinked file by the same name. (Doing
+;; this isn't dangerous, as it will just redirect you to the existing
+;; buffer.)
+(setq find-file-suppress-same-file-warnings t)
+
+;; Feature `saveplace' provides a minor mode for remembering the
+;; location of point in each file you visit, and returning it there
+;; when you find the file again.
+(use-feature saveplace
+  :demand t
+  :config
+
+  (save-place-mode +1))
+
+;; Package `projectile' keeps track of a "project" list, which is
+;; automatically added to as you visit Git repositories, Node.js
+;; projects, etc. It then provides commands for quickly navigating
+;; between and within these projects.
+(use-package projectile
+  :defer 1
+  :bind-keymap* (("C-c p" . projectile-command-map))
+  :config
+
+  ;; Use Selectrum (via `completing-read') for Projectile instead of
+  ;; IDO.
+  (setq projectile-completion-system 'default)
+
+  ;; When switching projects, give the option to choose what to do.
+  ;; This is a way better interface than having to remember ahead of
+  ;; time to use a prefix argument on `projectile-switch-project'
+  ;; (because, and please be honest here, when was the last time you
+  ;; actually remembered to do that?).
+  (setq projectile-switch-project-action 'projectile-commander)
+
+  (setq projectile-indexing-method 'alien)
+
+  (def-projectile-commander-method ?\C-m
+    "Find file in project."
+    (call-interactively #'find-file))
+
+  ;; Enable the mode again now that we have all the supporting hooks
+  ;; and stuff defined.
+  (projectile-mode +1)
+
+  ;; Can't bind M-r because some genius bound ESC. *Never* bind ESC!
+  (dolist (key '("C-r" "R"))
+    (bind-key key #'projectile-replace-regexp projectile-command-map))
+
+  :blackout t)
+
+(use-feature dired
+  :after dash
+  :hook (dired-mode . dired-hide-details-mode)
+  :config
+
+  (use-feature dired-x)
+
+  (setq dired-dwim-target t)
+  (--each '(dired-do-rename
+            dired-do-copy
+            dired-create-directory
+            wdired-abort-changes)
+    (eval `(defadvice ,it (after revert-buffer activate)
+             (revert-buffer))))
+  (defun dired-back-to-start-of-files ()
+    (interactive)
+    (backward-char (- (current-column) 2)))
+
+  (define-key dired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
+  (define-key dired-mode-map (kbd "k") 'dired-do-delete)
+
+  (put 'dired-find-alternate-file 'disabled nil)
+
+  ;; Delete with C-x C-k to match file buffers and magit
+  (define-key dired-mode-map (kbd "C-x C-k") 'dired-do-delete)
+
+  (eval-after-load "wdired"
+    '(progn
+       (define-key wdired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
+       (define-key wdired-mode-map (vector 'remap 'beginning-of-buffer) 'dired-back-to-top)
+       (define-key wdired-mode-map (vector 'remap 'end-of-buffer) 'dired-jump-to-bottom))))
+
+;;; Saving files
+
+;; Don't make autosave files.
 (setq auto-save-default nil)
-(setq make-backup-files nil)
+
+;; Don't make lockfiles.
 (setq create-lockfiles nil)
 
-;; Always prefer newer files
-(setq load-prefer-newer t)
+;;; Editing
+;;;; Text formatting
 
-;; Warn only when opening files bigger than 100MB
-(setq large-file-warning-threshold 100000000)
+(use-package wgrep)
 
-;; Move file to trash instead of removing.
-(setq-default delete-by-moving-to-trash t)
+;; When region is active, make `capitalize-word' and friends act on
+;; it.
+(bind-key "M-c" #'capitalize-dwim)
+(bind-key "M-l" #'downcase-dwim)
+(bind-key "M-u" #'upcase-dwim)
 
-;; Revert (update) buffers automatically when underlying files are changed externally.
-(global-auto-revert-mode +1)
+(define-minor-mode ms-fix-whitespace-mode
+  "Minor mode to automatically fix whitespace on save.
+If enabled, then saving the buffer deletes all trailing
+whitespace and ensures that the file ends with exactly one
+newline."
+  nil nil nil
+  (progn
+    (setq require-final-newline t)
+    (add-hook 'before-save-hook #'delete-trailing-whitespace nil 'local))
+  (setq require-final-newline nil)
+  (remove-hook 'before-save-hook #'delete-trailing-whitespace 'local))
 
-(setq
- inhibit-startup-message t         ; Don't show the startup message...
- inhibit-startup-screen t          ; ... or screen
- cursor-in-non-selected-windows t  ; Hide the cursor in inactive windows
+(define-globalized-minor-mode ms-fix-whitespace-global-mode
+  ms-fix-whitespace-mode ms-fix-whitespace-mode)
 
- echo-keystrokes 0.1               ; Show keystrokes right away, don't show the message in the scratch buffer
- sentence-end-double-space nil     ; Sentences should end in one space, come on!
- help-window-select t              ; Select help window so it's easy to quit it with 'q'
- )
+(ms-fix-whitespace-global-mode +1)
 
-;; never kill *scratch* buffer
-(add-hook 'kill-buffer-query-functions
-          (lambda() (not (equal (buffer-name) "*scratch*"))))
+;; Feature `newcomment' provides commands for commenting and
+;; uncommenting code, and editing comments.
+(use-feature newcomment
+  :bind (([remap default-indent-new-line] . #'+continue-comment))
+  :config
 
-(defalias 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
-(delete-selection-mode 1)          ; Delete selected text when typing
-(global-unset-key (kbd "s-p"))     ; Don't print
+  (defun +continue-comment ()
+    "Continue current comment, preserving trailing whitespace.
+This differs from `default-indent-new-line' in the following way:
 
-;; Delete trailing spaces and add new line in the end of a file on save.
-(add-hook 'before-save-hook 'delete-trailing-whitespace)
-(setq require-final-newline t)
+If you have a comment like \";; Some text\" with point at the end
+of the line, then running `default-indent-new-line' will get you
+a new line with \";; \", but running it again will get you a line
+with only \";;\" (no trailing whitespace). This is annoying for
+inserting a new paragraph in a comment. With this command, the
+two inserted lines are the same."
+    (interactive)
+    ;; `default-indent-new-line' uses `delete-horizontal-space'
+    ;; because in auto-filling we want to avoid the space character at
+    ;; the end of the line from being put at the beginning of the next
+    ;; line. But when continuing a comment it's not desired.
+    (cl-letf (((symbol-function #'delete-horizontal-space) #'ignore))
+      (default-indent-new-line))))
 
-;; Linear undo and redo.
+;; Feature `whitespace' provides a minor mode for highlighting
+;; whitespace in various special ways.
+(use-feature whitespace
+  :blackout t)
+
+;; Eliminate duplicates in the kill ring. That is, if you kill the
+;; same thing twice, you won't have to use M-y twice to get past it to
+;; older entries in the kill ring.
+(setq kill-do-not-save-duplicates t)
+
+;; Feature `delsel' provides an alternative behavior for certain
+;; actions when you have a selection active. Namely: if you start
+;; typing when you have something selected, then the selection will be
+;; deleted; and if you press DEL while you have something selected, it
+;; will be deleted rather than killed. (Otherwise, in both cases the
+;; selection is deselected and the normal function of the key is
+;; performed.)
+(use-feature delsel
+  :demand t
+  :config
+
+  (delete-selection-mode +1))
+
+;;;; Undo/redo
+
+;; Feature `warnings' allows us to enable and disable warnings.
+(use-feature warnings
+  :config
+
+  ;; Ignore the warning we get when a huge buffer is reverted and the
+  ;; undo information is too large to be recorded.
+  (add-to-list 'warning-suppress-log-types '(undo discard-info)))
+
+;; Package `undo-tree' replaces the default Emacs undo system, which
+;; is poorly designed and hard to use, with a much more powerful
+;; tree-based system. In basic usage, you don't even have to think
+;; about the tree, because it acts like a conventional undo/redo
+;; system. Bindings are C-/, M-/, and C-x u.
 (use-package undo-tree
-  :init
-  (progn
-    (global-undo-tree-mode)
-    (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/tmp/undo"))
-          undo-tree-auto-save-history t
-          undo-tree-visualizer-timestamps t
-          undo-tree-visualizer-diff t)))
-
-(global-subword-mode +1)
-
-(recentf-mode +1)
-
-;; =======
-;; VISUALS
-
-(when *is-linux* (menu-bar-mode -1))
-(tool-bar-mode -1)
-(scroll-bar-mode -1)
-(blink-cursor-mode -1)
-
-;; mode line settings
-(line-number-mode t)
-(column-number-mode t)
-(size-indication-mode t)
-
-;; Always wrap lines
-(global-visual-line-mode +1)
-
-;; Highlight current line
-(global-hl-line-mode 0)
-
-;; Show line numbers
-(global-display-line-numbers-mode t)
-(define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
-
-; Enable transparent title bar on macOS
-(when *is-mac*
-  (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
-  (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
-
-(setq visible-bell nil)
-(setq ring-bell-function (lambda ()
-                           (invert-face 'mode-line)
-                           (run-with-timer 0.05 nil 'invert-face 'mode-line)))
-
-;; Nice and simple default light theme.
-(setq custom-theme-directory (concat user-emacs-directory "themes"))
-
-(dolist
-    (path (directory-files custom-theme-directory t "\\w+"))
-  (when (file-directory-p path)
-    (add-to-list 'custom-theme-load-path path)))
-
-(defun +disable-themes ()
-  "Disable all active themes."
-  (dolist (i custom-enabled-themes)
-    (disable-theme i)))
-
-(defadvice load-theme (before disable-themes-first activate)
-  "Disable active themes before loading the new theme."
-  (+disable-themes))
-
-;; (load-theme 'tsdh-light t)
-
-;; (use-package leuven-theme
-;;   :config
-;;   (load-theme 'leuven t))
-
-;; (use-package solarized-theme)
-
-(use-package doom-themes
+  :demand t
+  :bind (;; By default, `undo' (and by extension `undo-tree-undo') is
+         ;; bound to C-_ and C-/, and `undo-tree-redo' is bound to
+         ;; M-_. It's logical to also bind M-/ to `undo-tree-redo'.
+         ;; This overrides the default binding of M-/, which is to
+         ;; `dabbrev-expand'.
+         :map undo-tree-map
+         ("M-/" . #'undo-tree-redo))
   :config
-  (load-theme 'doom-one-light t))
 
-;; (use-package spacemacs-theme
-;;   :defer t
-;;   :init
-;;   (load-theme 'spacemacs-light t))
+  (global-undo-tree-mode +1)
 
-(use-package plan9-theme
+  ;; Disable undo-in-region. It sounds like a cool feature, but
+  ;; unfortunately the implementation is very buggy and usually causes
+  ;; you to lose your undo history if you use it by accident.
+  (setq undo-tree-enable-undo-in-region nil)
+
+  :blackout t)
+
+;;;; Navigation
+
+;; Feature `subword' provides a minor mode which causes the
+;; `forward-word' and `backward-word' commands to stop at
+;; capitalization changes within a word, so that you can step through
+;; the components of CamelCase symbols one at a time.
+(use-feature subword
+  :demand t
   :config
-  (load-theme 'plan9 t))
 
-(fringe-mode '(2 . 2))
+  (global-subword-mode +1)
 
-;; (load-theme 'acme t)
-
-(when *is-mac*
-  ;; Render thinner fonts
-  (setq ns-use-thin-smoothing nil)
-  ;; Don't open a file in a new frame
-  (setq ns-pop-up-frames nil))
-
-(setq +font "IBM Plex Mono 14")
-(setq +font "Cascadia Mono PL 14")
-(setq +font "NotoSansMono Nerd Font Medium 14")
-(setq +font "Dank Mono 14")
-(setq +font "DejaVu Sans Mono 14")
-(setq +font "Roboto Mono 14")
-(setq +font "Fira Code 14")
-(setq +font "SF Mono 13")
-(setq +font "Monaco 13")
-
-(let ((font +font))
-  (set-frame-font font)
-  (add-to-list 'default-frame-alist
-               `(font . ,font)))
-
-;; Show parens and other pairs.
-
-(use-package smartparens
-  :config
-  (require 'smartparens-config)
-  (smartparens-global-mode +1)
-  (show-smartparens-global-mode +1))
-
-;; Hide minor modes from modeline
-(use-package rich-minority
-  :config
-  (setf rm-blacklist "")
-  (rich-minority-mode t))
-
-;; Display dir if two files have the same name
-(use-feature uniquify
-  :init
-  (progn
-    (setq uniquify-buffer-name-style 'reverse
-          uniquify-separator "|"
-          uniquify-after-kill-buffer-p t
-          uniquify-ignore-buffers-re "^\\*")))
-
-;; Show full path in the title bar.
-;; (setq-default frame-title-format "%b (%f)")
-(setq-default frame-title-format "")
-(setq ns-use-proxy-icon nil)
-
-;; Never use tabs, use spaces instead.
-(setq-default indent-tabs-mode nil)
-(setq tab-width 2)
-(setq js-indent-level 2)
-(setq css-indent-offset 2)
-(setq c-default-style "linux")
-(setq standard-indent 2)
-(setq-default c-basic-offset 2)
-(setq-default tab-width 2)
-(setq-default c-basic-indent 2)
-
-(use-package restart-emacs)
-
-;; ================
-;; BASIC NAVIGATION
-
-;; Kill line with CMD-Backspace. Note that thanks to Simpleclip, killing doesn't rewrite the system clipboard.
-;; Kill one word with Alt+Backspace.
-;; Kill forward word with Alt-Shift-Backspace.
-(global-set-key (kbd "s-<backspace>") 'kill-whole-line)
-(global-set-key (kbd "M-S-<backspace>") 'kill-word)
-
-;; Many commands in Emacs write the current position into mark ring.
-;; These custom functions allow for quick movement backward and forward.
-;; For example, if you were editing line 6, then did a search with Cmd+f, did something and want to come back,
-;; press Cmd+, to go back to line 6. Cmd+. to go forward.
-;; These keys are chosen because they are the same buttons as < and >, think of them as arrows.
-(defun my-pop-local-mark-ring ()
-  (interactive)
-  (set-mark-command t))
-
-(defun unpop-to-mark-command ()
-  "Unpop off mark ring. Does nothing if mark ring is empty."
-  (interactive)
-  (when mark-ring
-    (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
-    (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
-    (when (null (mark t)) (ding))
-    (setq mark-ring (nbutlast mark-ring))
-    (goto-char (marker-position (car (last mark-ring))))))
-
-(global-set-key (kbd "s-,") 'my-pop-local-mark-ring)
-(global-set-key (kbd "s-.") 'unpop-to-mark-command)
-
-(defadvice pop-to-mark-command (around ensure-new-position activate)
-  (let ((p (point)))
-    (when (eq last-command 'save-region-or-current-line)
-      ad-do-it
-      ad-do-it
-      ad-do-it)
-    (dotimes (i 10)
-      (when (= p (point)) ad-do-it))))
-
-(setq set-mark-command-repeat-pop t)
-
-;; ============
-;; TEXT EDITING
-
-(setq disabled-command-function nil)
+  :blackout t)
 
 (use-package expand-region
+  :demand t
   :bind (("M-m" . #'er/expand-region)
          ("C-'" . #'er/contract-region)))
 
 (use-package change-inner
+  :demand t
   :bind (("M-i" . #'change-inner)
          ("M-o" . #'change-outer)))
 
 (use-package smart-newline
+  :demand t
   :bind
   ("<s-return>" . eol-then-smart-newline)
   :hook
@@ -411,27 +594,19 @@ decrease this. If you experience stuttering, increase this.")
 (global-set-key (kbd "s-<return>") 'smart-open-line)            ;; Cmd+Return new line below
 (global-set-key (kbd "s-S-<return>") 'smart-open-line-above)    ;; Cmd+Shift+Return new line above
 
-;; Upcase and lowercase word or region, if selected.
-;; To capitalize or un-capitalize word use Alt+c and Alt+l
-(bind-key "M-c" #'capitalize-dwim)
-(bind-key "M-l" #'downcase-dwim)
-(bind-key "M-u" #'upcase-dwim)
-
-;; Visually find and replace text
-(use-package visual-regexp
-  :bind (("M-%" . vr/query-replace)))
-
 (use-package multiple-cursors
+  :demand t
   :bind (("s-d" . mc/mark-next-like-this)
          ("s-D" . mc/mark-previous-like-this)
          ("C-c s-d" . mc/mark-all-like-this-dwim))
   :config
   (multiple-cursors-mode +1))
 
-(use-package evil-mc
-  :disabled t
-  :config
-  (global-evil-mc-mode +1))
+;; Kill line with CMD-Backspace. Note that thanks to Simpleclip, killing doesn't rewrite the system clipboard.
+;; Kill one word with Alt+Backspace.
+;; Kill forward word with Alt-Shift-Backspace.
+(global-set-key (kbd "s-<backspace>") 'kill-whole-line)
+(global-set-key (kbd "M-S-<backspace>") 'kill-word)
 
 (use-package crux
   :demand t
@@ -444,403 +619,311 @@ decrease this. If you experience stuttering, increase this.")
   :config
   (global-set-key (kbd "C-c C-c") (crux-with-region-or-line comment-or-uncomment-region)))
 
-;; =================
-;; WINDOW MANAGEMENT
-
-
-;; This is rather radical, but saves from a lot of pain in the ass.
-;; When split is automatic, always split windows vertically
-(setq split-height-threshold 0)
-(setq split-width-threshold nil)
-
-
-;; Go to other windows easily with one keystroke Cmd-something.
-(global-set-key (kbd "s-1") (kbd "C-x 1"))  ;; Cmd-1 kill other windows (keep 1)
-(global-set-key (kbd "s-2") (kbd "C-x 2"))  ;; Cmd-2 split horizontally
-(global-set-key (kbd "s-3") (kbd "C-x 3"))  ;; Cmd-3 split vertically
-(global-set-key (kbd "s-0") (kbd "C-x 0"))  ;; Cmd-0...
-(global-set-key (kbd "s-w") (kbd "C-x 0"))  ;; ...and Cmd-w to close current window
-
-
-;; Move between windows with Control-Command-Arrow and with =Cmd= just like in iTerm.
-(use-feature windmove
-  :bind (("S-<left>" . windmove-left)
-         ("S-<right>" . windmove-right)
-         ("S-<up>" . windmove-up)
-         ("S-<down>" . windmove-down)))
-
-(use-feature winner
-  :config
-  (winner-mode 1))
-
-;; ==================
-;; PROJECT MANAGEMENT
-
-(use-feature dired
-  :after dash
-  :hook (dired-mode . dired-hide-details-mode)
-  :config
-
-  (use-feature dired-x)
-
-
-  (setq dired-dwim-target t)
-  (--each '(dired-do-rename
-            dired-do-copy
-            dired-create-directory
-            wdired-abort-changes)
-    (eval `(defadvice ,it (after revert-buffer activate)
-             (revert-buffer))))
-  (defun dired-back-to-start-of-files ()
-    (interactive)
-    (backward-char (- (current-column) 2)))
-
-  (define-key dired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
-  (define-key dired-mode-map (kbd "k") 'dired-do-delete)
-
-  (put 'dired-find-alternate-file 'disabled nil)
-
-  ;; Delete with C-x C-k to match file buffers and magit
-  (define-key dired-mode-map (kbd "C-x C-k") 'dired-do-delete)
-
-  (eval-after-load "wdired"
-    '(progn
-       (define-key wdired-mode-map (kbd "C-a") 'dired-back-to-start-of-files)
-       (define-key wdired-mode-map (vector 'remap 'beginning-of-buffer) 'dired-back-to-top)
-       (define-key wdired-mode-map (vector 'remap 'end-of-buffer) 'dired-jump-to-bottom))))
-
-;; Use Projectile for project management.
-(use-package projectile
-  :defer 1
-
-  :config
-  (setq projectile-switch-project-action #'projectile-dired)
-  ;; (setq projectile-enable-caching t)
-  (setq projectile-completion-system 'ivy)
-
-  (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
-  (global-set-key (kbd "C-x p s s") 'counsel-projectile-ag)
-
-  (projectile-mode +1)
-
-  :blackout t)
-
-(use-package counsel-projectile
-  :init
-
-  (counsel-projectile-mode +1)
-
-  :config
-
-  ;; Sort files using `prescient', instead of just showing them in
-  ;; lexicographic order.
-  (setq counsel-projectile-sort-files t))
-
-
-
-(use-package deadgrep
-  :defer t
-  :bind ("C-c h" . deadgrep))
-
-;; ==========================================
-;; MENUS AND COMPLETION (not code completion)
-
-;;;; Candidate selection
-
-; Package `ivy' provides a user interface for choosing from a list of
-;; options by typing a query to narrow the list, and then selecting
-;; one of the remaining candidates. This offers a significant
-;; improvement over the default Emacs interface for candidate
-;; selection.
-(use-package ivy
-  :init/el-patch
-
-  (defvar ivy-mode-map
-    (let ((map (make-sparse-keymap)))
-      (define-key map [remap switch-to-buffer]
-        'ivy-switch-buffer)
-      (define-key map [remap switch-to-buffer-other-window]
-        'ivy-switch-buffer-other-window)
-      map)
-    "Keymap for `ivy-mode'.")
-
-  (define-minor-mode ivy-mode
-    (el-patch-concat
-      "Toggle Ivy mode on or off.
-Turn Ivy mode on if ARG is positive, off otherwise.
-Turning on Ivy mode sets `completing-read-function' to
-`ivy-completing-read'.
-Global bindings:
-\\{ivy-mode-map}
-Minibuffer bindings:
-\\{ivy-minibuffer-map}"
-      (el-patch-add
-        "\n\nTo make it easier to lazy-load `ivy', this function
-sets `completion-in-region-function' regardless of the value of
-`ivy-do-completion-in-region'."))
-    :group 'ivy
-    :global t
-    :keymap ivy-mode-map
-    (el-patch-remove
-      :lighter " ivy")
-    (if ivy-mode
-        (progn
-          (setq completing-read-function 'ivy-completing-read)
-          (el-patch-splice 2
-            (when ivy-do-completion-in-region
-              (setq completion-in-region-function 'ivy-completion-in-region))))
-      (setq completing-read-function 'completing-read-default)
-      (setq completion-in-region-function 'completion--in-region)))
-
-  (ivy-mode +1)
-
-  :config
-
-  ;; With enough packages loaded, it is easy to get commands like
-  ;; `describe-symbol' to offer more than 30,000 candidates. Allow
-  ;; sorting in these cases.
-  (setq ivy-sort-max-size 50000)
-
-  (global-set-key (kbd "C-c C-r") 'ivy-resume)
-
-  :blackout t)
-
-;; Package `ivy-hydra' provides the C-o binding for Ivy menus which
-;; allows you to pick from a set of options for what to do with a
-;; selected candidate.
-(use-package ivy-hydra)
-
-;; Package `counsel' provides purpose-built replacements for many
-;; built-in Emacs commands that use enhanced configurations of `ivy'
-;; to provide extra features.
-(use-package counsel
-  :init/el-patch
-
-  (defvar counsel-mode-map
-    (let ((map (make-sparse-keymap)))
-      (dolist (binding
-               '((execute-extended-command . counsel-M-x)
-                 (describe-bindings . counsel-descbinds)
-                 (el-patch-remove
-                   (describe-function . counsel-describe-function)
-                   (describe-variable . counsel-describe-variable))
-                 (apropos-command . counsel-apropos)
-                 (describe-face . counsel-describe-face)
-                 (list-faces-display . counsel-faces)
-                 (find-file . counsel-find-file)
-                 (find-library . counsel-find-library)
-                 (imenu . counsel-imenu)
-                 (load-library . counsel-load-library)
-                 (load-theme . counsel-load-theme)
-                 (yank-pop . counsel-yank-pop)
-                 (info-lookup-symbol . counsel-info-lookup-symbol)
-                 (pop-to-mark-command . counsel-mark-ring)
-                 (bookmark-jump . counsel-bookmark)))
-        (define-key map (vector 'remap (car binding)) (cdr binding)))
-      map)
-    (el-patch-concat
-      "Map for `counsel-mode'.
-Remaps built-in functions to counsel replacements."
-      (el-patch-add
-        "\n\nBindings that are remapped by `helpful' have been removed.")))
-
-  (defcustom counsel-mode-override-describe-bindings nil
-    "Whether to override `describe-bindings' when `counsel-mode' is active."
-    :group 'ivy
-    :type 'boolean)
-
-  (define-minor-mode counsel-mode
-    "Toggle Counsel mode on or off.
-Turn Counsel mode on if ARG is positive, off otherwise. Counsel
-mode remaps built-in emacs functions that have counsel
-replacements.
-Local bindings (`counsel-mode-map'):
-\\{counsel-mode-map}"
-    :group 'ivy
-    :global t
-    :keymap counsel-mode-map
-    (el-patch-remove
-      :lighter " counsel")
-    (if counsel-mode
-        (progn
-          (when (and (fboundp 'advice-add)
-                     counsel-mode-override-describe-bindings)
-            (advice-add #'describe-bindings :override #'counsel-descbinds))
-          (define-key minibuffer-local-map (kbd "C-r")
-            'counsel-minibuffer-history))
-      (when (fboundp 'advice-remove)
-        (advice-remove #'describe-bindings #'counsel-descbinds))))
-
-  :init
-
-  (counsel-mode +1)
-
-  :bind* (;; Keybinding suggested by the documentation of Counsel, see
-          ;; https://github.com/abo-abo/swiper.
-          ("C-c k" . counsel-rg)
-          ("s-x" . counsel-M-x))
-  :config/el-patch
-
-  (defcustom counsel-rg-base-command
-    (el-patch-concat
-      "rg -S --no-heading --line-number --color never "
-      (el-patch-add
-        "-z --sort path ")
-      "%s .")
-    (el-patch-concat
-      "Alternative to `counsel-ag-base-command' using ripgrep.
-Note: don't use single quotes for the regex."
-      (el-patch-add
-        "\n\nSupport for searching compressed files and for
-reporting results in a deterministic order has been added by
-`el-patch'."))
-    :type 'string
-    :group 'ivy)
-
-  :blackout t)
-
-(use-package prescient
-  :config
-
-  ;; Remember usage statistics across Emacs sessions.
-  (prescient-persist-mode +1))
-
-(use-package ivy-prescient
-  :demand t
-  :after ivy
-  :config
-
-  ;; Use `prescient' for Ivy menus.
-  (ivy-prescient-mode +1))
-
-(use-feature isearch
-  :config
-
-  ;; Eliminate the 0.25s idle delay for isearch highlighting, as in my
-  ;; opinion it usually produces a rather disjointed and distracting
-  ;; UX.
-  (setq isearch-lazy-highlight-initial-delay 0))
-
-(use-package swiper
-  :bind (("C-s" . swiper)
-         ("C-r" . swiper))
-  :config
-
-  ;; Use only one color for subgroups in Swiper highlighting.
-  (setq swiper-faces '(swiper-match-face-1
-                       swiper-match-face-2
-                       swiper-match-face-2
-                       swiper-match-face-2)))
-
+;;;; Find and replace
 
 (use-package avy
   :bind (("C-=" . avy-goto-char)))
 
-(use-package ace-window
-  :bind (("C-x o" . ace-window)))
+;; Package `ctrlf' provides a replacement for `isearch' that is more
+;; similar to the tried-and-true text search interfaces in web
+;; browsers and other programs (think of what happens when you type
+;; ctrl+F).
+(use-package ctrlf
+  :straight (:host github :repo "raxod502/ctrlf")
+  :init
 
-(use-package snails
-  :straight (:host github :repo "manateelazycat/snails")
-  :demand t)
+  (ctrlf-mode +1))
 
-;; ========================
-;; VERSION CONTROL WITH GIT
+(use-package deadgrep
+  :bind ("C-c h" . deadgrep))
 
-
-;; Magit
-(use-package magit
-  :bind (("C-x g" . magit-status)
-         ("C-x C-b" . magit-blame-addition))
+;; Package `rg' just provides an interactive command `rg' to run the
+;; search tool of the same name.
+(use-package rg
+  :straight (:host github :repo "dajva/rg.el" :branch "develop")
+  :bind* (("C-c k" . #'+rg))
   :config
-  (setq magit-diff-refine-hunk 'all)
-  (setq magit-log-auto-more t)
-  (setq magit-completing-read-function 'ivy-completing-read)
 
-  (set-default 'magit-push-always-verify nil)
-  (set-default 'magit-revert-buffers 'silent)
-  (set-default 'magit-no-confirm '(stage-all-changes
-                                   unstage-all-changes))
+  (defun +rg (&optional only-current-type)
+    "Search for string in current project.
+With ONLY-CURRENT-TYPE non-nil, or interactively with prefix
+argument, search only in files matching current type."
+    (interactive "P")
+    (rg-run (rg-read-pattern nil)
+            (if only-current-type (car (rg-default-alias)) "*")
+            (rg-project-root buffer-file-name))))
 
-  (defun +magit-display-buffer (buffer)
-    "Like `magit-display-buffer-fullframe-status-v1' with two differences:
+;; Package `visual-regexp' provides an alternate version of
+;; `query-replace' which highlights matches and replacements as you
+;; type.
+(use-package visual-regexp
+  :bind (([remap query-replace] . #'vr/query-replace)))
 
-1. Magit sub-buffers that aren't spawned from a status screen are opened as
-   popups.
-2. The status screen isn't buried when viewing diffs or logs from the status
-   screen.
-
-   Taken from doom-emacs
-   "
-    (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
-      (display-buffer
-       buffer (cond
-               ;; If opened from an eshell window or popup, use the same window.
-               ((or (derived-mode-p 'eshell-mode)
-                    (eq (window-dedicated-p) 'side))
-                '(display-buffer-same-window))
-               ;; Open target buffers below the current one (we want previous
-               ;; magit windows to be visible; especially magit-status).
-               ((or (bound-and-true-p git-commit-mode)
-                    (derived-mode-p 'magit-mode))
-                (let ((size (if (eq buffer-mode 'magit-process-mode)
-                                0.35
-                              0.7)))
-                  `(display-buffer-below-selected
-                    . ((window-height . ,(truncate (* (window-height) size)))))))
-               ;; log/stash/process buffers, unless opened from a magit-status
-               ;; window, should be opened in popups.
-               ((memq buffer-mode '(magit-process-mode
-                                    magit-log-mode
-                                    magit-stash-mode))
-                '(display-buffer-below-selected))
-               ;; Last resort: use current window
-               ('(display-buffer-same-window))))))
-
-  (defun +magit-display-popup-buffer (buffer &optional alist)
-    "TODO"
-    (cond ((eq (window-dedicated-p) 'side)
-           (if (fboundp '+popup-display-buffer-stacked-side-window)
-               (+popup-display-buffer-stacked-side-window buffer alist)
-             (display-buffer-in-side-window buffer alist)))
-          ((derived-mode-p 'magit-mode)
-           (display-buffer-below-selected buffer alist))
-          ((display-buffer-in-side-window buffer alist))))
-
-  (setq magit-display-buffer-function #'+magit-display-buffer)
-  (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
-
-  (defun enforce-git-commit-conventions ()
-    "See https://chris.beams.io/posts/git-commit/"
-    (setq fill-column 72
-          git-commit-summary-max-length 50
-          git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
-  (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
-
-(use-package git-timemachine)
-
-;; Show changes in the gutter
-(use-package git-gutter-fringe
+;; Package `visual-regexp-steroids' allows `visual-regexp' to use
+;; regexp engines other than Emacs'; for example, Python or Perl
+;; regexps.
+(use-package visual-regexp-steroids
+  :demand t
+  :after visual-regexp
+  :bind (([remap query-replace-regexp] . #'+query-replace-literal))
   :config
-  (global-git-gutter-mode 't)
-  (setq-default fringes-outside-margins t)
-  (define-fringe-bitmap 'git-gutter-fr:added [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:modified [224]
-    nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
-    nil nil 'bottom)
 
-  (set-face-background 'git-gutter:modified 'nil)   ;; background color
-  (set-face-foreground 'git-gutter:added "green4")
-  (set-face-foreground 'git-gutter:deleted "red"))
+  ;; Use Emacs-style regular expressions by default, instead of
+  ;; Python-style.
+  (setq vr/engine 'emacs)
 
-(use-package git-link)
+  (defun +query-replace-literal ()
+    "Do a literal query-replace using `visual-regexp'."
+    (interactive)
+    (let ((vr/engine 'emacs-plain))
+      (call-interactively #'vr/query-replace))))
 
-;; ===============
-;; CODE COMPLETION
+;;; Electricity: automatic things
+;;;; Autorevert
 
+;; On macOS, Emacs has a nice keybinding to revert the current buffer.
+;; On other platforms such a binding is missing; we re-add it here.
+(bind-key "s-u" #'revert-buffer)
+
+;; Feature `autorevert' allows the use of file-watchers or polling in
+;; order to detect when the file visited by a buffer has changed, and
+;; optionally reverting the buffer to match the file (unless it has
+;; unsaved changes).
+(use-feature autorevert
+  :defer 2
+  :config
+
+  ;; Turn the delay on auto-reloading from 5 seconds down to 1 second.
+  ;; We have to do this before turning on `auto-revert-mode' for the
+  ;; change to take effect. (Note that if we set this variable using
+  ;; `customize-set-variable', all it does is toggle the mode off and
+  ;; on again to make the change take effect, so that way is dumb.)
+  (setq auto-revert-interval 1)
+
+  (global-auto-revert-mode +1)
+
+  ;; Auto-revert all buffers, not only file-visiting buffers. The
+  ;; docstring warns about potential performance problems but this
+  ;; should not be an issue since we only revert visible buffers.
+  (setq global-auto-revert-non-file-buffers t)
+
+  ;; Since we automatically revert all visible buffers after one
+  ;; second, there's no point in asking the user whether or not they
+  ;; want to do it when they find a file. This disables that prompt.
+  (setq revert-without-query '(".*"))
+
+  :blackout auto-revert-mode)
+
+;;;; Automatic delimiter pairing
+
+;; Package `smartparens' provides an API for manipulating paired
+;; delimiters of many different types, as well as interactive commands
+;; and keybindings for operating on paired delimiters at the
+;; s-expression level. It provides a Paredit compatibility layer.
+(use-package smartparens
+  :demand t
+  :config
+
+  ;; Load the default pair definitions for Smartparens.
+  (require 'smartparens-config)
+
+  ;; Enable Smartparens functionality in all buffers.
+  (smartparens-global-mode +1)
+
+  ;; When in Paredit emulation mode, Smartparens binds M-( to wrap the
+  ;; following s-expression in round parentheses. By analogy, we
+  ;; should bind M-[ to wrap the following s-expression in square
+  ;; brackets. However, this breaks escape sequences in the terminal,
+  ;; so it may be controversial upstream. We only enable the
+  ;; keybinding in windowed mode.
+  (when (display-graphic-p)
+    (setf (map-elt sp-paredit-bindings "M-[") #'sp-wrap-square))
+
+  ;; Set up keybindings for s-expression navigation and manipulation
+  ;; in the style of Paredit.
+  (sp-use-paredit-bindings)
+
+  ;; Highlight matching delimiters.
+  (show-smartparens-global-mode +1)
+
+  ;; Prevent all transient highlighting of inserted pairs.
+  (setq sp-highlight-pair-overlay nil)
+  (setq sp-highlight-wrap-overlay nil)
+  (setq sp-highlight-wrap-tag-overlay nil)
+
+  ;; Don't disable autoskip when point moves backwards. (This lets you
+  ;; open a sexp, type some things, delete some things, etc., and then
+  ;; type over the closing delimiter as long as you didn't leave the
+  ;; sexp entirely.)
+  (setq sp-cancel-autoskip-on-backward-movement nil)
+
+  ;; Disable Smartparens in Org-related modes, since the keybindings
+  ;; conflict.
+
+  (use-feature org
+    :config
+
+    (add-to-list 'sp-ignore-modes-list #'org-mode))
+
+  (use-feature org-agenda
+    :config
+
+    (add-to-list 'sp-ignore-modes-list #'org-agenda-mode))
+
+  ;; Make C-k kill the sexp following point in Lisp modes, instead of
+  ;; just the current line.
+  (bind-key [remap kill-line] #'sp-kill-hybrid-sexp smartparens-mode-map
+            (apply #'derived-mode-p sp-lisp-modes))
+
+  (defun +smartparens-indent-new-pair (&rest _)
+    "Insert an extra newline after point, and reindent."
+    (newline)
+    (indent-according-to-mode)
+    (forward-line -1)
+    (indent-according-to-mode))
+
+  ;; The following is a really absurdly stupid hack that I can barely
+  ;; stand to look at. It needs to be fixed.
+  ;;
+  ;; Nevertheless, I can't live without the feature it provides (which
+  ;; should really come out of the box IMO): when pressing RET after
+  ;; inserting a pair, add an extra newline and indent. See
+  ;; <https://github.com/Fuco1/smartparens/issues/80#issuecomment-18910312>.
+
+  (defun +smartparens-pair-setup (mode delim)
+    "In major mode MODE, set up DELIM with newline-and-indent."
+    (sp-local-pair mode delim nil :post-handlers
+                   '((+smartparens-indent-new-pair "RET")
+                     (+smartparens-indent-new-pair "<return>"))))
+
+  (+smartparens-pair-setup #'prog-mode "(")
+  (+smartparens-pair-setup #'prog-mode "[")
+  (+smartparens-pair-setup #'prog-mode "{")
+  (+smartparens-pair-setup #'python-mode "\"\"\"")
+  (+smartparens-pair-setup #'latex-mode "\\[")
+  (+smartparens-pair-setup #'markdown-mode "```")
+
+  ;; It's unclear to me why any of this is needed.
+  (+smartparens-pair-setup #'json-mode "[")
+  (+smartparens-pair-setup #'json-mode "{")
+  (+smartparens-pair-setup #'tex-mode "{")
+
+  ;; Deal with `protobuf-mode' not using `define-minor-mode'.
+  (+smartparens-pair-setup #'protobuf-mode "{")
+
+  ;; Work around https://github.com/Fuco1/smartparens/issues/783.
+  (setq sp-escape-quotes-after-insert nil)
+
+  ;; Quiet some silly messages.
+  (dolist (key '(:unmatched-expression :no-matching-tag))
+    (setf (cdr (assq key sp-message-alist)) nil))
+
+  :blackout t)
+
+;;;; Snippet expansion
+
+;; Feature `abbrev' provides functionality for expanding user-defined
+;; abbreviations. We prefer to use `yasnippet' instead, though.
+(use-feature abbrev
+  :blackout t)
+
+;; Package `yasnippet' allows the expansion of user-defined
+;; abbreviations into fillable templates. The only reason we have it
+;; here is because it gets pulled in by LSP, and we need to unbreak
+;; some stuff.
+(use-package yasnippet
+  :bind (:map yas-minor-mode-map
+
+              ;; Disable TAB from expanding snippets, as I don't use it and
+              ;; it's annoying.
+              ("TAB" . nil)
+              ("<tab>" . nil))
+  :config
+
+  ;; Reduce verbosity. The default value is 3. Bumping it down to 2
+  ;; eliminates a message about successful snippet lazy-loading setup
+  ;; on every(!) Emacs init. Errors should still be shown.
+  (setq yas-verbosity 2)
+
+  ;; Make it so that Company's keymap overrides Yasnippet's keymap
+  ;; when a snippet is active. This way, you can TAB to complete a
+  ;; suggestion for the current field in a snippet, and then TAB to
+  ;; move to the next field. Plus, C-g will dismiss the Company
+  ;; completions menu rather than cancelling the snippet and moving
+  ;; the cursor while leaving the completions menu on-screen in the
+  ;; same location.
+  (use-feature company
+    :config
+
+    ;; This function translates the "event types" I get from
+    ;; `map-keymap' into things that I can pass to `lookup-key' and
+    ;; `define-key'. It's a hack, and I'd like to find a built-in
+    ;; function that accomplishes the same thing while taking care of
+    ;; any edge cases I might have missed in this ad-hoc solution.
+    (defun radian--yasnippet-normalize-event (event)
+      "This function is a complete hack, do not use.
+But in principle, it translates what we get from `map-keymap'
+into what `lookup-key' and `define-key' want."
+      (if (vectorp event)
+          event
+        (vector event)))
+
+    ;; Here we define a hybrid keymap that delegates first to
+    ;; `company-active-map' and then to `yas-keymap'.
+    (defvar radian--yasnippet-then-company-keymap
+      ;; It starts out as a copy of `yas-keymap', and then we
+      ;; merge in all of the bindings from `company-active-map'.
+      (let ((keymap (copy-keymap yas-keymap)))
+        (map-keymap
+         (lambda (event company-cmd)
+           (let* ((event (radian--yasnippet-normalize-event event))
+                  (yas-cmd (lookup-key yas-keymap event)))
+             ;; Here we use an extended menu item with the
+             ;; `:filter' option, which allows us to dynamically
+             ;; decide which command we want to run when a key is
+             ;; pressed.
+             (define-key keymap event
+               `(menu-item
+                 nil ,company-cmd :filter
+                 (lambda (cmd)
+                   ;; There doesn't seem to be any obvious
+                   ;; function from Company to tell whether or not
+                   ;; a completion is in progress (à la
+                   ;; `company-explicit-action-p'), so I just
+                   ;; check whether or not `company-my-keymap' is
+                   ;; defined, which seems to be good enough.
+                   (if company-my-keymap
+                       ',company-cmd
+                     ',yas-cmd))))))
+         company-active-map)
+        keymap)
+      "Keymap which delegates to both `company-active-map' and `yas-keymap'.
+The bindings in `company-active-map' only apply if Company is
+currently active.")
+
+    ;; (radian-defadvice radian--advice-company-overrides-yasnippet
+    ;;     (yas--make-control-overlay &rest args)
+    ;;   :around #'yas--make-control-overlay
+    ;;   "Allow `company' keybindings to override those of `yasnippet'."
+    ;;   ;; The function `yas--make-control-overlay' uses the current
+    ;;   ;; value of `yas-keymap' to build the Yasnippet overlay, so to
+    ;;   ;; override the Yasnippet keymap we only need to dynamically
+    ;;   ;; rebind `yas-keymap' for the duration of that function.
+    ;;   (let ((yas-keymap radian--yasnippet-then-company-keymap))
+    ;;     (apply yas--make-control-overlay args)))
+    )
+
+  :blackout yas-minor-mode)
+
+;;;; Autocompletion
+
+;; Package `company' provides an in-buffer autocompletion framework.
+;; It allows for packages to define backends that supply completion
+;; candidates, as well as optional documentation and source code. Then
+;; Company allows for multiple frontends to display the candidates,
+;; such as a tooltip menu. Company stands for "Complete Anything".
 (use-package company
-  :defer 3
+  :defer 1
   :custom
   (company-idle-delay 0)
   (company-global-modes '(not org-mode))
@@ -877,6 +960,7 @@ reporting results in a deterministic order has been added by
                   comint-next-matching-input-from-input))))
 
 (use-package company-quickhelp
+  :disabled t
   :after company
   :config
   (define-key company-active-map (kbd "C-c h") #'company-quickhelp-manual-begin)
@@ -885,26 +969,12 @@ reporting results in a deterministic order has been added by
 ;; Package `company-prescient' provides intelligent sorting and
 ;; filtering for candidates in Company completions.
 (use-package company-prescient
-  :disabled t
   :demand t
   :after company
   :config
 
   ;; Use `prescient' for Company menus.
   (company-prescient-mode +1))
-
-(use-package company-box
-  :disabled t
-  :hook (company-mode . company-box-mode)
-  :config
-  (setq company-box-show-single-candidate t
-        company-box-backends-colors nil
-        company-box-max-candidates 50)
-
-  (defun +func1 (test)
-    (string " "))
-
-  (setq company-box-icons-functions '(+func1)))
 
 (defvar he-search-loc-backward (make-marker))
 (defvar he-search-loc-forward (make-marker))
@@ -1079,256 +1149,111 @@ string).  It returns t if a new completion is found, nil otherwise."
 (global-set-key (kbd "C-:") 'hippie-expand-lines)
 (global-set-key (kbd "C-,") 'hippie-expand-try-functions-list)
 
-(use-package eacl
-  :ensure nil
-  :straight (:host github :repo "redguardtoo/eacl")
-  :demand t)
+;;;; Definition location
 
-;; ===========
-;; PROGRAMMING
+;; Package `dumb-jump' provides a mechanism to jump to the definitions
+;; of functions, variables, etc. in a variety of programming
+;; languages. The advantage of `dumb-jump' is that it doesn't try to
+;; be clever, so it "just works" instantly for dozens of languages
+;; with zero configuration.
+(use-package dumb-jump
+  :init/el-patch
 
-(defvar indent-sensitive-modes '())
+  (defvar dumb-jump-mode-map
+    (let ((map (make-sparse-keymap)))
+      (define-key map (kbd "C-M-g") 'dumb-jump-go)
+      (define-key map (kbd "C-M-p") 'dumb-jump-back)
+      (define-key map (kbd "C-M-q") 'dumb-jump-quick-look)
+      map))
 
-(use-package markdown-mode)
+  (define-minor-mode dumb-jump-mode
+    "Minor mode for jumping to variable and function definitions"
+    :global t
+    :keymap dumb-jump-mode-map)
 
-;; Web-mode is an autonomous emacs major-mode for editing web templates.
-;; HTML documents can embed parts (CSS / JavaScript) and blocks (client / server side).
-(use-package web-mode
-  :mode (("\\.phtml\\'" . web-mode)
-         ("\\.tpl\\.php\\'" . web-mode)
-         ("\\.[agj]sp\\'" . web-mode)
-         ("\\.as[cp]x\\'" . web-mode)
-         ("\\.erb\\'" . web-mode)
-         ("\\.mustache\\'" . web-mode)
-         ("\\.djhtml\\'" . web-mode)
-         ("\\.html?\\'" . web-mode))
+  :init
+
+  (dumb-jump-mode +1)
+
+  :bind (:map dumb-jump-mode-map
+              ("M-Q" . #'dumb-jump-quick-look))
+  :bind* (("C-M-d" . #'dumb-jump-go-prompt)
+          ("C-x 4 g" . #'dumb-jump-go-other-window)
+          ("C-x 4 d" . #'+dumb-jump-go-prompt-other-window))
   :config
 
-  ;; Indent by two spaces by default.
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
+  (defun +dumb-jump-go-prompt-other-window ()
+    "Like `dumb-jump-go-prompt' but use a different window."
+    (interactive)
+    (let ((dumb-jump-window 'other))
+      (dumb-jump-go-prompt))))
 
-  ;; Autocomplete </ instantly.
-  (setq web-mode-enable-auto-closing t))
+;;;; Display contextual metadata
 
-;; Emmet
-(use-package emmet-mode
-  :hook ((web-mode . emmet-mode)
-         (css-mode . emmet-mode))
-  :commands emmet-mode
-  :init
-  (setq emmet-indentation 2)
-  (setq emmet-move-cursor-between-quotes t))
-
-(defvar org-folder "~/Sync/org")
-
-(use-package org
-  :disabled t
+;; Feature `eldoc' provides a minor mode (enabled by default in Emacs
+;; 25) which allows function signatures or other metadata to be
+;; displayed in the echo area.
+(use-feature eldoc
   :demand t
-  :mode (("\\.org$" . org-mode))
-  :bind (("C-c l" . org-store-link)
-         ("C-c a" . org-agenda)
-         ("C-c c" . org-capture))
-
   :config
-  (setq org-startup-indented t)         ;; Visually indent sections. This looks better for smaller files.
-  (setq org-src-tab-acts-natively t)    ;; Tab in source blocks should act like in major mode
-  (setq org-src-preserve-indentation t)
-  (setq org-log-into-drawer t)          ;; State changes for todos and also notes should go into a Logbook drawer
-  (setq org-src-fontify-natively t)     ;; Code highlighting in code blocks
-  (setq org-log-done 'time)             ;; Add closed date when todo goes to DONE state
-  (setq org-support-shift-select t)     ;; Allow shift selection with arrows.
-  (setq org-directory "~/Sync/org"
-        org-default-notes-file (concat org-folder "/todo.org"))
-  (setq org-agenda-files '("~/Sync/org"))
+  ;; Always truncate ElDoc messages to one line. This prevents the
+  ;; echo area from resizing itself unexpectedly when point is on a
+  ;; variable with a multiline docstring.
+  (setq eldoc-echo-area-use-multiline-p nil)
+  :blackout t)
 
-  (setq org-capture-templates
-        '(("t" "Todo" entry (file+headline (lambda () (concat org-folder "/todo.org")) "Todo")
-           "* TODO %? \n  %^t")
-          ("i" "Idea" entry (file+headline (lambda () (concat org-folder "/ideas.org")) "Ideas")
-           "* %? \n %U")
-          ("e" "Tweak" entry (file+headline (lambda () (concat org-folder "/tweaks.org")) "Tweaks")
-           "* %? \n %U")
-          ("l" "Learn" entry (file+headline (lambda () (concat org-folder "/learn.org" )) "Learn")
-           "* %? \n")
-          ("w" "icn" entry (file+headline (lambda () (concat org-folder "/icn.org")) "Work")
-           "* %? \n")
-          ("m" "Check movie" entry (file+headline (lambda () (concat org-folder "/check.org")) "Movies")
-           "* %? %^g")
-          ("n" "Check book" entry (file+headline (lambda () (concat org-folder "/check.org")) "Books")
-           "* %^{book name} by %^{author} %^g")))
+;;;; Syntax checking and code linting
 
-  (use-package org-projectile
-    ;; :bind ("C-c n p" . org-projectile-project-todo-completing-read)
-    :config
-    (setq org-projectile-projects-file "~/Sync/org/project_todos.org")
-    (setq org-agenda-files (append org-agenda-files (org-projectile-todo-files))))
-
-  (use-package org-bullets
-    :config
-    (setq org-hide-leading-stars t)
-    (add-hook 'org-mode-hook
-              (lambda ()
-                (org-bullets-mode t)))))
-
-;; Open config file by pressing C-x and then C
-(global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
-
-(setq-default evil-want-C-u-scroll t)
-(setq-default evil-want-C-d-scroll t)
-(setq-default evil-symbol-word-search t)
-(setq-default evil-esc-delay 0)
-
-(use-package evil
+;; Package `flycheck' provides a framework for in-buffer error and
+;; warning highlighting, or more generally syntax checking. It comes
+;; with a large number of checkers pre-defined, and other packages
+;; define more.
+(use-package flycheck
+  :defer 4
   :init
 
-  ;; (setq evil-normal-state-cursor 'box
-  ;;       evil-insert-state-cursor 'box
-  ;;       evil-visual-state-cursor 'box
-  ;;       evil-motion-state-cursor 'box
-  ;;       evil-replace-state-cursor 'box
-  ;;       evil-operator-state-cursor 'box
-  ;;       evil-emacs-state-cursor 'box)
+  (defun radian--flycheck-disable-checkers (&rest checkers)
+    "Disable the given Flycheck syntax CHECKERS, symbols.
+This function affects only the current buffer, and neither causes
+nor requires Flycheck to be loaded."
+    (unless (boundp 'flycheck-disabled-checkers)
+      (setq flycheck-disabled-checkers nil))
+    (make-local-variable 'flycheck-disabled-checkers)
+    (dolist (checker checkers)
+      (cl-pushnew checker flycheck-disabled-checkers)))
+
+  :bind-keymap (("C-c !" . #'flycheck-command-map))
 
   :config
-  (defadvice evil-scroll-page-down
-      (after advice-for-evil-scroll-page-down activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-scroll-page-up
-      (after advice-for-evil-scroll-page-up activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-search-next
-      (after advice-for-evil-search-next activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-  (defadvice evil-search-previous
-      (after advice-for-evil-search-previous activate)
-    (evil-scroll-line-to-center (line-number-at-pos)))
-
-  (define-key evil-normal-state-map (kbd "C-u") 'evil-scroll-up)
-
-  (evil-mode t)
-
-  (use-package evil-visualstar
-    :commands (evil-visualstar/begin-search
-               evil-visualstar/begin-search-forward
-               evil-visualstar/begin-search-backward)
-    :init
-    (evil-define-key* 'visual 'global
-                      "*" #'evil-visualstar/begin-search-forward
-                      "#" #'evil-visualstar/begin-search-backward))
-
-  (use-package evil-numbers
-    :config
-    (define-key evil-normal-state-map (kbd "C-c +") 'evil-numbers/inc-at-pt)
-    (define-key evil-normal-state-map (kbd "C-c -") 'evil-numbers/dec-at-pt))
-
-  (use-package evil-matchit
-    :config
-    (global-evil-matchit-mode 1))
-
-  (use-package evil-surround
-    :config
-    (global-evil-surround-mode 1)))
-
-(use-package wgrep)
-
-(use-package yasnippet
-  :config
-  (yas-global-mode 1)
-  (use-package yasnippet-snippets)
-  (global-set-key (kbd "C-c s") 'company-yasnippet))
-
-(use-package flycheck
-  :disabled t
-  :config
-  (setq-default flycheck-disabled-checkers '(less less-stylelin less-stylelintt))
-  ;; (setq flycheck-ruby-rubocop-executable "bundle exec rubocop")
 
   (global-flycheck-mode +1)
 
-  (setq flycheck-indication-mode 'left-fringe)
-  ;; A non-descript, left-pointing arrow
+  (dolist (name '("python" "python2" "python3"))
+    (add-to-list 'safe-local-variable-values
+                 `(flycheck-python-pycompile-executable . ,name)))
 
-  (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow
-    [16 48 112 240 112 48 16] nil nil 'center)
+  ;; Run a syntax check when changing buffers, just in case you
+  ;; modified some other files that impact the current one. See
+  ;; https://github.com/flycheck/flycheck/pull/1308.
+  (add-to-list 'flycheck-check-syntax-automatically 'idle-buffer-switch)
 
-  (use-package flycheck-posframe
-    :config
-    (flycheck-posframe-mode 1)))
+  ;; For the above functionality, check syntax in a buffer that you
+  ;; switched to only briefly. This allows "refreshing" the syntax
+  ;; check state for several buffers quickly after e.g. changing a
+  ;; config file.
+  (setq flycheck-buffer-switch-check-intermediate-buffers t)
 
-(use-package dumb-jump
-  :demand t
-  :bind* (("C-M-d" . dumb-jump-quick-look)
-          ([remap evil-jump-to-tag] . dumb-jump-go))
+  ;; Display errors in the echo area after only 0.2 seconds, not 0.9.
+  (setq flycheck-display-errors-delay 0.2)
+
   :config
-  (setq dumb-jump-selector 'ivy))
 
-(use-package lsp-mode
-  :config
-  (use-package lsp-ui
-    :hook (lsp-mode . lsp-ui-mode)
-    :config
-    (setq lsp-prefer-flymake nil)
-    (setq lsp-ui-doc-max-height 8)
-    (setq lsp-ui-doc-max-width 35)
-    (setq lsp-ui-sideline-ignore-duplicate t))
+  (bind-key "p" #'flycheck-previous-error)
+  (bind-key "n" #'flycheck-next-error)
 
-  (use-package company-lsp
-    :config
-    (setq company-transformers nil)
-    (setq company-lsp-async t)
-    (setq company-lsp-enable-recompletion t)
-    (setq company-lsp-enable-snippet t)
-    (push 'company-lsp company-backends)))
+  :blackout t)
 
-(use-package coffee-mode
-  :mode "\\.coffee\\.*"
-  :config
-  (setq coffee-args-repl '("-i" "--nodejs"))
-  (setq coffee-tab-width 2)
-  (setq coffee-indent-like-python-mode t)
-
-  (add-to-list 'indent-sensitive-modes '(coffee-mode)))
-
-(use-package js
-  :custom
-  (js-indent-level 2)
-  (js-switch-indent-offset 2))
-
-(use-package js2-mode
-  :mode "\\.js\\'"
-  :interpreter
-  ("node" . js2-mode)
-  :hook
-  (js2-mode . js2-imenu-extras-mode)
-  :custom
-  (js2-highlight-level 3)
-  :config
-  (setenv "NODE_NO_READLINE" "1")
-
-  (defun +use-eslint-from-node-modules ()
-    (let* ((root (locate-dominating-file
-                  (or (buffer-file-name) default-directory)
-                  "node_modules"))
-           (eslint (and root
-                        (expand-file-name "node_modules/eslint/bin/eslint.js"
-                                          root))))
-      (when (and eslint (file-executable-p eslint))
-        (setq-local flycheck-javascript-eslint-executable eslint))))
-
-  (add-hook 'flycheck-mode-hook #'+use-eslint-from-node-modules))
-
-(use-package nodejs-repl
-  :defer t)
-
-;; (use-package rjsx-mode
-;;   :after js2-mode)
-
-(use-package json-mode
-  :mode (("\\.bowerrc$"     . json-mode)
-         ("\\.jshintrc$"    . json-mode)
-         ("\\.json_schema$" . json-mode))
-  :config (setq js-indent-level 2))
+;;; Language support
 
 (use-package ruby-mode
   :mode
@@ -1432,59 +1357,471 @@ Name is relative to the project root.")
                  "'\n")))))
   (global-set-key (kbd "C-c M-j") #'+run-ruby-console))
 
-(use-package yari)
+;;; Applications
+;;;; Organization
 
-;; (use-package projectile-rails
-;;   :after projectile
-;;   :config
-;;   (setq projectile-rails-keymap-prefix (kbd "C-c r"))
-;;   (projectile-rails-global-mode 1))
+(defvar org-folder "~/Sync/org")
 
-(use-package feature-mode
-  :bind (("C-c C-p" . #'+cycle-selenium-phantomjs)
-         ("C-c C-d" . #'+feature-add-debug-line))
-  :mode "\\.feature$"
+;; Package `org' provides too many features to describe in any
+;; reasonable amount of space. It is built fundamentally on
+;; `outline-mode', and adds TODO states, deadlines, properties,
+;; priorities, etc. to headings. Then it provides tools for
+;; interacting with this data, including an agenda view, a time
+;; clocker, etc. There are *many* extensions.
+(use-feature org
+  :bind (:map org-mode-map
+
+              ;; Prevent Org from overriding the bindings for
+              ;; windmove. By default, these keys are mapped to
+              ;; `org-shiftleft', etc.
+              ("S-<left>" . nil)
+              ("S-<right>" . nil)
+              ("S-<up>" . nil)
+              ("S-<down>" . nil)
+
+              ;; Add replacements for the keybindings we just removed.
+              ;; C-<left> and C-<right> are unused by Org. C-<up> and
+              ;; C-<down> are bound to `org-backward-paragraph', etc.
+              ;; (but see below).
+              ("C-<left>" . #'org-shiftleft)
+              ("C-<right>" . #'org-shiftright)
+              ("C-<up>" . #'org-shiftup)
+              ("C-<down>" . #'org-shiftdown)
+
+              ;; By default, Org maps C-<up> to
+              ;; `org-backward-paragraph' instead of
+              ;; `backward-paragraph' (and analogously for C-<down>).
+              ;; However, it doesn't do the same remapping for the
+              ;; other bindings of `backward-paragraph' (e.g. M-{).
+              ;; Here we establish that remapping. (This is important
+              ;; since we remap C-<up> and C-<down> to other things,
+              ;; above. So otherwise there would be no easy way to
+              ;; invoke `org-backward-paragraph' and
+              ;; `org-forward-paragraph'.)
+              ([remap backward-paragraph] . #'org-backward-paragraph)
+              ([remap forward-paragraph] . #'org-forward-paragraph)
+
+              ;; See discussion of this function below.
+              ("C-M-RET" . #'radian-org-insert-heading-at-point)
+              ("C-M-<return>" . #'radian-org-insert-heading-at-point))
+  :bind* (;; Add the global keybindings for accessing Org Agenda and
+          ;; Org Capture that are recommended in the Org manual.
+          ("C-c a" . #'org-agenda)
+          ("C-c c" . #'org-capture))
   :config
 
-  (defun +feature-add-debug-line ()
+  ;; If you try to insert a heading in the middle of an entry, don't
+  ;; split it in half, but instead insert the new heading after the
+  ;; end of the current entry.
+  (setq org-insert-heading-respect-content t)
+
+  ;; But add a new function for recovering the old behavior (see
+  ;; `:bind' above).
+  (defun radian-org-insert-heading-at-point ()
+    "Insert heading without respecting content.
+This runs `org-insert-heading' with
+`org-insert-heading-respect-content' bound to nil."
     (interactive)
-    (save-excursion
-      (end-of-line)
-      (smart-open-line-above)
-      (insert "And I debug with pry")
-      (indent-according-to-mode)))
+    (let ((org-insert-heading-respect-content nil))
+      (org-insert-heading)))
 
-  (defun +change-to (new-mode)
-    (kill-word 1)
-    (insert new-mode))
+  ;; Show headlines but not content by default.
+  (setq org-startup-folded 'content)
 
-  (defun +cycle-selenium-phantomjs ()
-    "toggle selenium to javascript and other way around"
-    (interactive)
-    (save-excursion
-      (goto-line 1)
-      (if (looking-at "@selenium")
-          (+change-to "@javascript")
-        (if (looking-at "@javascript")
-            (+change-to "@selenium"))))))
+  ;; Make it possible to dim or hide blocked tasks in the agenda view.
+  (setq org-enforce-todo-dependencies t)
 
-(use-package haml-mode
-  :mode "\\.haml$")
+  ;; Make C-a, C-e, and C-k smarter with regard to headline tags.
+  (setq org-special-ctrl-a/e t)
+  (setq org-special-ctrl-k t)
 
-(use-package go-mode)
-(use-package go-eldoc)
-(use-package go-guru)
-(use-package gorepl-mode)
-(use-package company-go
-  :after go-mode
+  (put 'org-tags-exclude-from-inheritance 'safe-local-variable
+       #'radian--list-of-strings-p)
+
+  ;; When you create a sparse tree and `org-indent-mode' is enabled,
+  ;; the highlighting destroys the invisibility added by
+  ;; `org-indent-mode'. Therefore, don't highlight when creating a
+  ;; sparse tree.
+  (setq org-highlight-sparse-tree-matches nil))
+
+;; Feature `org-indent' provides an alternative view for Org files in
+;; which sub-headings are indented.
+(use-feature org-indent
+  :init
+
+  (add-hook 'org-mode-hook #'org-indent-mode))
+
+;; Feature `org-agenda' from package `org' provides the agenda view
+;; functionality, which allows for collating TODO items from your Org
+;; files into a single buffer.
+(use-feature org-agenda
+  :bind (:map org-agenda-mode-map
+
+              ;; Prevent Org Agenda from overriding the bindings for
+              ;; windmove.
+              ("S-<up>" . nil)
+              ("S-<down>" . nil)
+              ("S-<left>" . nil)
+              ("S-<right>" . nil)
+
+              ;; Same routine as above. Now for Org Agenda, we could use
+              ;; C-up and C-down because M-{ and M-} are bound to the same
+              ;; commands. But I think it's best to take the same approach
+              ;; as before, for consistency.
+              ("C-<left>" . #'org-agenda-do-date-earlier)
+              ("C-<right>" . #'org-agenda-do-date-later))
   :config
-  (setq company-go-show-annotation t)
-  (eval-after-load 'company
-    '(push 'company-go company-backends)))
 
-(use-package kotlin-mode)
+;;   (radian-defadvice radian--advice-org-agenda-default-directory
+;;       (org-agenda &rest args)
+;;     :around #'org-agenda
+;;     "If `org-directory' exists, set `default-directory' to it in the agenda.
+;; This makes the behavior of `find-file' more reasonable."
+;;     (let ((default-directory (if (file-exists-p org-directory)
+;;                                  org-directory
+;;                                default-directory)))
+;;       (apply org-agenda args)))
 
-(executable-find company-go-gocode-command)
+  ;; (radian-defadvice radian--advice-blackout-org-agenda
+  ;;     (&rest _)
+  ;;   :override #'org-agenda-set-mode-name
+  ;;   "Override the `org-agenda' mode lighter to just \"Org-Agenda\"."
+  ;;   "Org-Agenda")
+
+  ;; (radian-defhook radian--org-agenda-setup ()
+  ;;   org-agenda-mode-hook
+  ;;   "Disable `visual-line-mode' locally."
+  ;;   ;; See https://superuser.com/a/531670/326239.
+  ;;   (visual-line-mode -1)
+  ;;   (let ((inhibit-message t)
+  ;;         (message-log-max nil))
+  ;;     ;; I'm not exactly sure why this is necessary. More research is
+  ;;     ;; needed.
+  ;;     (toggle-truncate-lines +1)))
+
+  ;; Hide blocked tasks in the agenda view.
+  (setq org-agenda-dim-blocked-tasks 'invisible))
+
+;; Feature `org-clock' from package `org' provides the task clocking
+;; functionality.
+(use-feature org-clock
+  ;; We have to autoload these functions in order for the below code
+  ;; that enables clock persistence without slowing down startup to
+  ;; work.
+  :commands (org-clock-load org-clock-save)
+  :init
+
+  ;; Allow clock data to be saved persistently.
+  (setq org-clock-persist t)
+
+  ;; Actually enable clock persistence. This is taken from
+  ;; `org-clock-persistence-insinuate', but we can't use that function
+  ;; since it causes both `org' and `org-clock' to be loaded for no
+  ;; good reason.
+  (add-hook 'org-mode-hook 'org-clock-load)
+
+;;   (radian-defhook radian--org-clock-save ()
+;;     kill-emacs-hook
+;;     "Run `org-clock-save', but only if Org has been loaded.
+;; Using this on `kill-emacs-hook' instead of `org-clock-save'
+;; prevents a delay on killing Emacs when Org was not yet loaded."
+;;     (when (featurep 'org)
+;;       (org-clock-save)))
+
+  :bind* (;; Make some `org-mode-map' bindings global instead.
+          ("C-c C-x C-i" . #'org-clock-in)
+          ("C-c C-x C-o" . #'org-clock-out)
+          ("C-c C-x C-x" . #'org-clock-in-last)
+          ("C-c C-x C-j" . #'org-clock-goto)
+          ("C-c C-x C-q" . #'org-clock-cancel))
+
+  :config
+
+  (advice-add #'org-clock-load :around #'radian--advice-silence-messages)
+
+  (defun radian--advice-org-clock-load-automatically (&rest _)
+    "Run `org-clock-load'.
+This is a `:before' advice for various Org functions which might
+be invoked before `org-mode-hook' is run."
+    (org-clock-load))
+
+  (dolist (fun '(org-clock-in
+                 org-clock-out
+                 org-clock-in-last
+                 org-clock-goto
+                 org-clock-cancel))
+    (advice-add fun :before #'radian--advice-org-clock-load-automatically)))
+
+
+;; Magit
+(use-package magit
+  :bind (("C-x g" . magit-status)
+         ("C-x C-b" . magit-blame-addition))
+  :config
+  (setq magit-diff-refine-hunk 'all)
+  (setq magit-log-auto-more t)
+  (setq magit-completing-read-function 'ivy-completing-read)
+
+  (set-default 'magit-push-always-verify nil)
+  (set-default 'magit-revert-buffers 'silent)
+  (set-default 'magit-no-confirm '(stage-all-changes
+                                   unstage-all-changes))
+
+  (defun +magit-display-buffer (buffer)
+    "Like `magit-display-buffer-fullframe-status-v1' with two differences:
+
+1. Magit sub-buffers that aren't spawned from a status screen are opened as
+   popups.
+2. The status screen isn't buried when viewing diffs or logs from the status
+   screen.
+
+   Taken from doom-emacs
+   "
+    (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
+      (display-buffer
+       buffer (cond
+               ;; If opened from an eshell window or popup, use the same window.
+               ((or (derived-mode-p 'eshell-mode)
+                    (eq (window-dedicated-p) 'side))
+                '(display-buffer-same-window))
+               ;; Open target buffers below the current one (we want previous
+               ;; magit windows to be visible; especially magit-status).
+               ((or (bound-and-true-p git-commit-mode)
+                    (derived-mode-p 'magit-mode))
+                (let ((size (if (eq buffer-mode 'magit-process-mode)
+                                0.35
+                              0.7)))
+                  `(display-buffer-below-selected
+                    . ((window-height . ,(truncate (* (window-height) size)))))))
+               ;; log/stash/process buffers, unless opened from a magit-status
+               ;; window, should be opened in popups.
+               ((memq buffer-mode '(magit-process-mode
+                                    magit-log-mode
+                                    magit-stash-mode))
+                '(display-buffer-below-selected))
+               ;; Last resort: use current window
+               ('(display-buffer-same-window))))))
+
+  (defun +magit-display-popup-buffer (buffer &optional alist)
+    "TODO"
+    (cond ((eq (window-dedicated-p) 'side)
+           (if (fboundp '+popup-display-buffer-stacked-side-window)
+               (+popup-display-buffer-stacked-side-window buffer alist)
+             (display-buffer-in-side-window buffer alist)))
+          ((derived-mode-p 'magit-mode)
+           (display-buffer-below-selected buffer alist))
+          ((display-buffer-in-side-window buffer alist))))
+
+  (setq magit-display-buffer-function #'+magit-display-buffer)
+  (setq magit-popup-display-buffer-action '(+magit-display-popup-buffer))
+
+  (defun enforce-git-commit-conventions ()
+    "See https://chris.beams.io/posts/git-commit/"
+    (setq fill-column 72
+          git-commit-summary-max-length 50
+          git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
+  (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
+
+(use-package git-timemachine)
+
+;; Show changes in the gutter
+(use-package git-gutter-fringe
+  :config
+  (global-git-gutter-mode 't)
+  (setq-default fringes-outside-margins t)
+  (define-fringe-bitmap 'git-gutter-fr:added [224]
+    nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:modified [224]
+    nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240]
+    nil nil 'bottom)
+
+  (set-face-background 'git-gutter:modified 'nil)   ;; background color
+  (set-face-foreground 'git-gutter:added "green4")
+  (set-face-foreground 'git-gutter:deleted "red"))
+
+;; Package `git-link' provides a simple function M-x git-link which
+;; copies to the kill ring a link to the current line of code or
+;; selection on GitHub, GitLab, etc.
+(use-package git-link
+  :config
+
+  ;; Link to a particular revision of a file rather than using the
+  ;; branch name in the URL.
+  (setq git-link-use-commit t))
+
+;; Package `forge' provides a GitHub/GitLab/etc. interface directly
+;; within Magit.
+(use-package forge)
+
+;;; Startup
+
+;; Disable the *About GNU Emacs* buffer at startup, and go straight
+;; for the scratch buffer.
+(setq inhibit-startup-screen t)
+
+;; Don't show the startup message...
+(setq inhibit-startup-message t)
+
+;; Remove the initial *scratch* message. Start with a blank screen, we
+;; know what we're doing.
+(setq initial-scratch-message nil)
+
+;;; Miscellaneous
+
+(use-package restart-emacs)
+
+;; Enable all disabled commands.
+(setq disabled-command-function nil)
+
+;; Modifier Keys
+
+;; Both command keys are 'Super'
+(when *is-mac*
+  (setq mac-right-command-modifier 'super)
+  (setq mac-command-modifier 'super)
+  ;; Option or Alt is naturally 'Meta'
+  (setq mac-option-modifier 'meta)
+  ;; Right Alt (option) can be used to enter symbols like em dashes '—' and euros '€' and stuff.
+  (setq mac-right-option-modifier 'nil))
+
+
+;; Sane Defaults
+
+(setq default-directory "~/" )
+
+;; Smoother and nicer scrolling
+(setq scroll-margin 0)
+(setq scroll-step 0)
+(setq next-line-add-newlines nil)
+(setq scroll-conservatively 100000)
+(setq scroll-preserve-screen-position 1)
+
+(when *is-linux*
+  (setq x-select-enable-primary nil
+        x-select-enable-clipboard t
+        interprogram-paste-function 'x-cut-buffer-or-selection-value))
+
+;; Warn only when opening files bigger than 100MB
+(setq large-file-warning-threshold 100000000)
+
+;; Move file to trash instead of removing.
+(setq-default delete-by-moving-to-trash t)
+
+;; Revert (update) buffers automatically when underlying files are changed externally.
+(global-auto-revert-mode +1)
+
+(setq
+ cursor-in-non-selected-windows t  ; Hide the cursor in inactive windows
+ echo-keystrokes 0.1               ; Show keystrokes right away, don't show the message in the scratch buffer
+ sentence-end-double-space nil     ; Sentences should end in one space, come on!
+ help-window-select t              ; Select help window so it's easy to quit it with 'q'
+ )
+
+;; never kill *scratch* buffer
+(add-hook 'kill-buffer-query-functions
+          (lambda() (not (equal (buffer-name) "*scratch*"))))
+
+(defalias 'yes-or-no-p 'y-or-n-p)      ; y and n instead of yes and no everywhere else
+(delete-selection-mode 1)          ; Delete selected text when typing
+(global-unset-key (kbd "s-p"))     ; Don't print
+
+(recentf-mode +1)
+
+;; Many commands in Emacs write the current position into mark ring.
+;; These custom functions allow for quick movement backward and forward.
+;; For example, if you were editing line 6, then did a search with Cmd+f, did something and want to come back,
+;; press Cmd+, to go back to line 6. Cmd+. to go forward.
+;; These keys are chosen because they are the same buttons as < and >, think of them as arrows.
+(defun my-pop-local-mark-ring ()
+  (interactive)
+  (set-mark-command t))
+
+(defun unpop-to-mark-command ()
+  "Unpop off mark ring. Does nothing if mark ring is empty."
+  (interactive)
+  (when mark-ring
+    (setq mark-ring (cons (copy-marker (mark-marker)) mark-ring))
+    (set-marker (mark-marker) (car (last mark-ring)) (current-buffer))
+    (when (null (mark t)) (ding))
+    (setq mark-ring (nbutlast mark-ring))
+    (goto-char (marker-position (car (last mark-ring))))))
+
+(global-set-key (kbd "s-,") 'my-pop-local-mark-ring)
+(global-set-key (kbd "s-.") 'unpop-to-mark-command)
+
+(defadvice pop-to-mark-command (around ensure-new-position activate)
+  (let ((p (point)))
+    (when (eq last-command 'save-region-or-current-line)
+      ad-do-it
+      ad-do-it
+      ad-do-it)
+    (dotimes (i 10)
+      (when (= p (point)) ad-do-it))))
+
+(setq set-mark-command-repeat-pop t)
+
+;; Open config file by pressing C-x and then C
+(global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
+
+(setq-default evil-want-C-u-scroll t)
+(setq-default evil-want-C-d-scroll t)
+(setq-default evil-symbol-word-search t)
+(setq-default evil-esc-delay 0)
+
+(use-package evil
+  :disabled t
+  :init
+
+  ;; (setq evil-normal-state-cursor 'box
+  ;;       evil-insert-state-cursor 'box
+  ;;       evil-visual-state-cursor 'box
+  ;;       evil-motion-state-cursor 'box
+  ;;       evil-replace-state-cursor 'box
+  ;;       evil-operator-state-cursor 'box
+  ;;       evil-emacs-state-cursor 'box)
+
+  :config
+  (defadvice evil-scroll-page-down
+      (after advice-for-evil-scroll-page-down activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-scroll-page-up
+      (after advice-for-evil-scroll-page-up activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-search-next
+      (after advice-for-evil-search-next activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+  (defadvice evil-search-previous
+      (after advice-for-evil-search-previous activate)
+    (evil-scroll-line-to-center (line-number-at-pos)))
+
+  (define-key evil-normal-state-map (kbd "C-u") 'evil-scroll-up)
+
+  (evil-mode t)
+
+  (use-package evil-visualstar
+    :commands (evil-visualstar/begin-search
+               evil-visualstar/begin-search-forward
+               evil-visualstar/begin-search-backward)
+    :init
+    (evil-define-key* 'visual 'global
+                      "*" #'evil-visualstar/begin-search-forward
+                      "#" #'evil-visualstar/begin-search-backward))
+
+  (use-package evil-numbers
+    :config
+    (define-key evil-normal-state-map (kbd "C-c +") 'evil-numbers/inc-at-pt)
+    (define-key evil-normal-state-map (kbd "C-c -") 'evil-numbers/dec-at-pt))
+
+  (use-package evil-matchit
+    :config
+    (global-evil-matchit-mode 1))
+
+  (use-package evil-surround
+    :config
+    (global-evil-surround-mode 1)))
+
+
 (defun copy-buffer-file-name ()
   "Copy buffer's full path."
   (interactive)
@@ -1496,14 +1833,6 @@ Name is relative to the project root.")
   (interactive)
   (mapc 'kill-buffer (cdr (buffer-list (current-buffer)))))
 
-(defun git-file-path (path)
-  "File path in relation to git root."
-  (let* ((root (file-truename (vc-git-root path)))
-         (filename (file-name-nondirectory path))
-         (filename-length (length filename)))
-    (let ((chunk (file-relative-name path root)))
-      (substring chunk 0 (- (length chunk) filename-length)))))
-
 (global-set-key (kbd "s-f") #'copy-buffer-file-name)
 
 (use-package string-inflection
@@ -1512,11 +1841,6 @@ Name is relative to the project root.")
   (global-set-key (kbd "C-c C") 'string-inflection-camelcase)
   (global-set-key (kbd "C-c L") 'string-inflection-lower-camelcase)
   (global-set-key (kbd "C-c J") 'string-inflection-java-style-cycle))
-
-(use-package keyfreq
-  :config
-  (keyfreq-mode +1)
-  (keyfreq-autosave-mode +1))
 
 (use-package dash
   :config
@@ -1927,28 +2251,116 @@ region-end is used."
 
     (global-set-key (kbd "C-M-j") #'+join-line-indent)
     (global-set-key (kbd "C-w") 'kill-region-or-backward-word)
-    (global-set-key (kbd "C-c C--") 'camelcase-word-or-region)
-    (global-set-key (kbd "C-c C-_") 'snakecase-word-or-region)))
+    (global-set-key (kbd "C-c C--") 'camelcase-word-or-region))
+  (global-set-key (kbd "C-c C-_") 'snakecase-word-or-region))
 
-(use-package restclient)
 
-(use-package yaml-mode)
-(use-package ag)
-(use-package editorconfig)
+;; =======
+;; VISUALS
 
-(global-set-key (kbd "C-+") 'text-scale-increase)
-(global-set-key (kbd "C--") 'text-scale-decrease)
+(menu-bar-mode -1)
+(tool-bar-mode -1)
+(scroll-bar-mode -1)
+(blink-cursor-mode nil)
 
-;; (use-package centaur-tabs
-;;   :config
-;;   (centaur-tabs-mode t)
-;;   :bind
-;;   ("C-<prior>" . centaur-tabs-backward)
-;;   ("C-<next>" . centaur-tabs-forward))
+;; mode line settings
+(line-number-mode t)
+(column-number-mode t)
+(size-indication-mode t)
 
-(use-package scala-mode
-  :interpreter
-    ("scala" . scala-mode))
+;; Always wrap lines
+(global-visual-line-mode +1)
 
-(use-package rustic
-  :mode ("\\.rs$" . rustic-mode))
+;; Highlight current line
+(global-hl-line-mode 0)
+
+;; Show line numbers
+(global-display-line-numbers-mode t)
+(define-key global-map (kbd "C-x l") 'global-display-line-numbers-mode)
+
+
+;; Allow you to resize frames however you want, not just in whole
+;; columns. "The 80s called, they want their user interface back"
+(setq frame-resize-pixelwise t)
+
+; Enable transparent title bar on macOS
+(when *is-mac*
+  (add-to-list 'default-frame-alist '(ns-appearance . light)) ;; {light, dark}
+  (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t)))
+
+(setq visible-bell nil)
+(setq ring-bell-function (lambda ()
+                           (invert-face 'mode-line)
+                           (run-with-timer 0.05 nil 'invert-face 'mode-line)))
+
+(setq custom-theme-directory (concat user-emacs-directory "themes"))
+
+(dolist
+    (path (directory-files custom-theme-directory t "\\w+"))
+  (when (file-directory-p path)
+    (add-to-list 'custom-theme-load-path path)))
+
+(defun +disable-themes ()
+  "Disable all active themes."
+  (dolist (i custom-enabled-themes)
+    (disable-theme i)))
+
+(defadvice load-theme (before disable-themes-first activate)
+  "Disable active themes before loading the new theme."
+  (+disable-themes))
+
+(fringe-mode '(2 . 2))
+
+(when *is-mac*
+  ;; Render thinner fonts
+  (setq ns-use-thin-smoothing nil)
+  ;; Don't open a file in a new frame
+  (setq ns-pop-up-frames nil))
+
+(setq +font "Roboto Mono Light 13")
+
+(let ((font +font))
+  (set-frame-font font)
+  (add-to-list 'default-frame-alist
+               `(font . ,font)))
+
+;; Display dir if two files have the same name
+(use-feature uniquify
+  :demand t
+  :init
+  (progn
+    (setq uniquify-buffer-name-style 'reverse
+          uniquify-separator "|"
+          uniquify-after-kill-buffer-p t
+          uniquify-ignore-buffers-re "^\\*")))
+
+;; Hide minor modes from modeline
+(use-package rich-minority
+  :demand t
+  :config
+  (setf rm-blacklist "")
+  (rich-minority-mode t))
+
+;; Show full path in the title bar.
+;; (setq-default frame-title-format "%b (%f)")
+(setq-default frame-title-format "")
+(setq ns-use-proxy-icon nil)
+
+(use-package doom-themes)
+
+(straight-register-package
+ '(zerodark-theme :host github :repo "NicolasPetton/zerodark-theme"))
+(use-package zerodark-theme
+  :demand t
+  :config
+  (enable-theme 'zerodark))
+
+(load "elegant-emacs/sanity.el")
+(load "elegant-emacs/elegance.el")
+
+;;; Closing
+
+;; Prune the build cache for straight.el; this will prevent it from
+;; growing too large. Do this after the final hook to prevent packages
+;; installed there from being pruned.
+(straight-prune-build-cache)
