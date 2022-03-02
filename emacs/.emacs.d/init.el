@@ -6,7 +6,8 @@
 ;;; Code:
 
 (setq comp-speed 3
-      comp-deferred-compilation t)
+      comp-deferred-compilation t
+      native-comp-async-report-warnings-errors nil)
 
 (if (and (fboundp 'native-comp-available-p)
        (native-comp-available-p))
@@ -83,6 +84,8 @@ decrease this. If you experience stuttering, increase this.")
   (require 'el-patch))
 
 (use-package restart-emacs)
+
+(set-default-coding-systems 'utf-8)
 
 (use-feature server
   :demand t
@@ -217,6 +220,7 @@ this command switches the keys so that they work as expected."
 (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
 
 (use-package golden-ratio-scroll-screen
+  :disabled t
   :bind
   ([remap scroll-down-command] . 'golden-ratio-scroll-screen-down)
   ([remap scroll-up-command] . 'golden-ratio-scroll-screen-up))
@@ -360,6 +364,10 @@ this command switches the keys so that they work as expected."
 
 ;; ================
 ;; BASIC NAVIGATION
+
+(use-package which-key
+  :config
+  (which-key-mode))
 
 ;; Kill line with CMD-Backspace. Note that thanks to Simpleclip, killing doesn't rewrite the system clipboard.
 ;; Kill one word with Alt+Backspace.
@@ -560,26 +568,10 @@ this command switches the keys so that they work as expected."
 
 ;;;; Candidate selection
 
-;; Package `selectrum' is an incremental completion and narrowing
-;; framework. Like Ivy and Helm, which it improves on, Selectrum
-;; provides a user interface for choosing from a list of options by
-;; typing a query to narrow the list, and then selecting one of the
-;; remaining candidates. This offers a significant improvement over
-;; the default Emacs interface for candidate selection.
-(use-package selectrum
-  :straight (:host github :repo "raxod502/selectrum")
-  :defer t
-  :bind* (("s-x" . execute-extended-command))
-  :init
-
-  ;; This doesn't actually load Selectrum.
-  (selectrum-mode +1)
-
-  :blackout t)
-
 ;; Package `prescient' is a library for intelligent sorting and
 ;; filtering in various contexts.
 (use-package prescient
+  :disabled t
   :config
 
   ;; Remember usage statistics across Emacs sessions.
@@ -589,26 +581,357 @@ this command switches the keys so that they work as expected."
   ;; this out.
   (setq prescient-history-length 1000))
 
-;; Package `selectrum-prescient' provides intelligent sorting and
-;; filtering for candidates in Selectrum menus.
-(use-package selectrum-prescient
-  :straight (:host github :repo "raxod502/prescient.el"
-                   :files ("selectrum-prescient.el"))
-  :demand t
-  :after selectrum
+;; Use minimalist Ivy for most things.
+(use-package ivy
+  :disabled t
+  :diminish                             ;; don't show Ivy in minor mode list
+  :init
+  (let ((standard-search-fn #'+ivy-prescient-non-fuzzy)
+        (alt-search-fn #'ivy--regex-ignore-order))
+    (setq ivy-re-builders-alist
+          `((counsel-rg     . ,standard-search-fn)
+            (swiper         . ,standard-search-fn)
+            (swiper-isearch . ,standard-search-fn)
+            (t . ,alt-search-fn))
+          ivy-more-chars-alist
+          '((counsel-rg . 1)
+            (counsel-search . 2)
+            (t . 3))))
+
   :config
+  (ivy-mode 1)                          ;; enable Ivy everywhere
 
-  (selectrum-prescient-mode +1))
+  (setq ivy-count-format "(%d/%d) ")
+  (setq ivy-sort-max-size 7500)
 
-;; Package `ctrlf' provides a replacement for `isearch' that is more
-;; similar to the tried-and-true text search interfaces in web
-;; browsers and other programs (think of what happens when you type
-;; ctrl+F).
-(use-package ctrlf
-  :straight (:host github :repo "raxod502/ctrlf")
+  (setq ivy-height 17
+        ivy-wrap t
+        ivy-fixed-height-minibuffer t
+        ivy-read-action-function #'ivy-hydra-read-action
+        ivy-read-action-format-function #'ivy-read-action-format-columns
+        ivy-initial-inputs-alist nil
+        projectile-completion-system 'ivy
+        ;; don't show recent files in switch-buffer
+        ivy-use-virtual-buffers nil
+        ;; ...but if that ever changes, show their full path
+        ivy-virtual-abbreviate 'full
+        ;; don't quit minibuffer on delete-error
+        ivy-on-del-error-function #'ignore
+        ;; enable ability to select prompt (alternative to `ivy-immediate-done')
+        ivy-use-selectable-prompt t)
+
+
+  ;; (setq ivy-re-builders-alist
+  ;;     '((swiper . ivy--regex-plus)
+  ;;       (t      . ivy--regex-fuzzy)))   ;; enable fuzzy searching everywhere except for Swiper
+
+  (global-set-key (kbd "s-b") 'ivy-switch-buffer)  ;; Cmd+b show buffers and recent files
+  (global-set-key (kbd "M-s-b") 'ivy-resume))      ;; Alt+Cmd+b resume whatever Ivy was doing
+
+
+;; Swiper is a better local finder.
+(use-package swiper
+  :disabled t
+  :config
+  (global-set-key "\C-s" 'swiper)
+  (global-set-key "\C-r" 'swiper)
+  (setq swiper-action-recenter t))
+
+
+;; Better menus with Counsel (a layer on top of Ivy)
+(use-package counsel
+  :disabled t
+  :config
+  (global-set-key (kbd "M-x") 'counsel-M-x)            ;; Alt+x run command
+  (global-set-key (kbd "s-x") 'counsel-M-x)            ;; Alt+x run command
+  (global-set-key (kbd "s-P") 'counsel-M-x)            ;; Cmd+Shift+p run command
+  (global-set-key (kbd "C-x C-f") 'counsel-find-file)  ;; Replace built-in Emacs 'find file' (open file) with Counsel
+  (global-set-key (kbd "s-o") 'counsel-find-file))     ;; Cmd+o open file
+
+;; (use-package smex)  ;; show recent commands when invoking Alt-x (or Cmd+Shift+p)
+;; (use-package flx)   ;; enable fuzzy matching
+;; (use-package avy)   ;; enable avy for quick navigation
+
+(use-package ivy-prescient
+  :disabled t
+  :hook (ivy-mode . ivy-prescient-mode)
+  :hook (ivy-prescient-mode . prescient-persist-mode)
+  :commands +ivy-prescient-non-fuzzy
+
+  :init
+  (setq prescient-filter-method '(literal regexp initialism fuzzy))
+
+  :config
+  (setq ivy-prescient-sort-commands
+        '(:not swiper swiper-isearch ivy-switch-buffer
+               lsp-ivy-workspace-symbol ivy-resume ivy--restore-session
+               counsel-grep counsel-git-grep counsel-rg counsel-ag
+               counsel-ack counsel-fzf counsel-pt counsel-imenu
+               counsel-yank-pop counsel-recentf counsel-buffer-or-recentf)
+        ivy-prescient-retain-classic-highlighting t)
+  (defun +ivy-prescient-non-fuzzy (str)
+    (let ((prescient-filter-method '(literal regexp)))
+      (ivy-prescient-re-builder str)))
+
+  )
+
+
+;; Make Ivy a bit more friendly by adding information to ivy buffers, e.g. description of commands in Alt-x, meta info when switching buffers, etc.
+(use-package ivy-rich
+  :disabled t
+  :after ivy
+  :config
+  (setq ivy-rich-parse-remote-buffer nil)
+  (setq ivy-rich-path-style 'abbrev)        ;; Abbreviate paths using abbreviate-file-name (e.g. replace “/home/username” with “~”)
+
+  (ivy-rich-mode +1)
+  (ivy-rich-project-root-cache-mode +1))
+
+
+;; Integrate Projectile with Counsel
+(use-package counsel-projectile
+  :disabled t
+  :config
+  (setq counsel-projectile-sort-files t)
+  (counsel-projectile-mode +1)
+  (global-set-key (kbd "C-x C-f") 'counsel-find-file)
+  (global-set-key (kbd "s-p") 'counsel-projectile-find-file)         ;; Cmd+p open file in current project
+  (global-set-key (kbd "s-F") 'counsel-projectile-rg))     ;; Cmd+Shift+F search in current git repository
+
+;; Enable vertico
+(use-package vertico
+  :init
+  (vertico-mode)
+
+  ;; Grow and shrink the Vertico minibuffer
+  ;; (setq vertico-resize t)
+
+  ;; Optionally enable cycling for `vertico-next' and `vertico-previous'.
+  ;; (setq vertico-cycle t)
+  )
+
+;; Configure directory extension.
+;; NOTE: The file `vertico-directory.el' must be installed manually.
+(use-package vertico-directory
+  :straight nil
+  :load-path "straight/build/vertico/extensions"
+  ;; More convenient directory navigation commands
+  :bind (:map vertico-map
+              ("RET" . vertico-directory-enter)
+              ("DEL" . vertico-directory-delete-char)
+              ("M-DEL" . vertico-directory-delete-word)))
+  ;; Tidy shadowed file names
+
+;; Use the `orderless' completion style. Additionally enable
+;; `partial-completion' for file path expansion. `partial-completion' is
+;; important for wildcard support. Multiple files can be opened at once
+;; with `find-file' if you enter a wildcard. You may also give the
+;; `initials' completion style a try.
+(use-package orderless
+  :init
+  (setq completion-styles '(orderless)
+        completion-category-defaults nil
+        completion-category-overrides '((file (styles partial-completion)))))
+
+;; Persist history over Emacs restarts. Vertico sorts by history position.
+(use-package savehist
+  :init
+  (savehist-mode))
+
+;; (restart-emacs)
+
+;; A few more useful configurations...
+(use-package emacs
+  :init
+  ;; (global-set-key (kbd "M-x") 'execute-extended-command)
+  (global-set-key (kbd "s-x") 'execute-extended-command)            ;; Alt+x run command
+  ;; Add prompt indicator to `completing-read-multiple'.
+  ;; Alternatively try `consult-completing-read-multiple'.
+  (defun crm-indicator (args)
+    (cons (concat "[CRM] " (car args)) (cdr args)))
+  (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
+
+  ;; Do not allow the cursor in the minibuffer prompt
+  (setq minibuffer-prompt-properties
+        '(read-only t cursor-intangible t face minibuffer-prompt))
+  (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
+
+  ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
+  ;; Vertico commands are hidden in normal buffers.
+  ;; (setq read-extended-command-predicate
+  ;;       #'command-completion-default-include-p)
+
+  ;; Enable recursive minibuffers
+  (setq enable-recursive-minibuffers t))
+
+;; (setq projectile-completion-system 'ivy)             ;; Use Ivy in Projectile
+
+;; Enable richer annotations using the Marginalia package
+(use-package marginalia
+  ;; Either bind `marginalia-cycle` globally or only in the minibuffer
+  :bind (("M-A" . marginalia-cycle)
+         :map minibuffer-local-map
+         ("M-A" . marginalia-cycle))
+
+  ;; The :init configuration is always executed (Not lazy!)
   :init
 
-  (ctrlf-mode +1))
+  ;; Must be in the :init section of use-package such that the mode gets
+  ;; enabled right away. Note that this forces loading the package.
+  (marginalia-mode))
+
+(use-package embark
+  :ensure t
+
+  :bind
+  (("C-." . embark-act)         ;; pick some comfortable binding
+   ("C-;" . embark-dwim)        ;; good alternative: M-.
+   ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+
+  :init
+
+  ;; Optionally replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command)
+
+  :config
+
+  ;; Hide the mode line of the Embark live/completions buffers
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
+
+;; Consult users will also want the embark-consult package.
+(use-package embark-consult
+  :ensure t
+  :after (embark consult)
+  :demand t ; only necessary if you have the hook below
+  ;; if you want to have consult previews as you move around an
+  ;; auto-updating embark collect buffer
+  :hook
+  (embark-collect-mode . consult-preview-at-point-mode))
+
+;; Example configuration for Consult
+(use-package consult
+  ;; Replace bindings. Lazily loaded due by `use-package'.
+  :bind (;; C-c bindings (mode-specific-map)
+         ("C-c h" . consult-history)
+         ("C-c m" . consult-mode-command)
+         ("C-c b" . consult-bookmark)
+         ("C-c k" . consult-kmacro)
+         ;; C-x bindings (ctl-x-map)
+         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+         ;; Custom M-# bindings for fast register access
+         ("M-#" . consult-register-load)
+         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+         ("C-M-#" . consult-register)
+         ;; Other custom bindings
+         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+         ("<help> a" . consult-apropos)            ;; orig. apropos-command
+         ;; M-g bindings (goto-map)
+         ("M-g e" . consult-compile-error)
+         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+         ("M-g g" . consult-goto-line)             ;; orig. goto-line
+         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+         ("M-g m" . consult-mark)
+         ("M-g k" . consult-global-mark)
+         ("M-g i" . consult-imenu)
+         ("M-g I" . consult-imenu-multi)
+         ;; M-s bindings (search-map)
+         ("M-s f" . consult-find)
+         ("M-s F" . consult-locate)
+         ("M-s g" . consult-grep)
+         ("M-s G" . consult-git-grep)
+         ("M-s r" . consult-ripgrep)
+         ("M-s l" . consult-line)
+         ("C-s" . consult-line)
+         ("M-s L" . consult-line-multi)
+         ("M-s m" . consult-multi-occur)
+         ("M-s k" . consult-keep-lines)
+         ("M-s u" . consult-focus-lines)
+         ;; Isearch integration
+         ("M-s e" . consult-isearch)
+         :map isearch-mode-map
+         ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
+         ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+         ("M-s L" . consult-line-multi))           ;; needed by consult-line to detect isearch
+
+  ;; Enable automatic preview at point in the *Completions* buffer.
+  ;; This is relevant when you use the default completion UI,
+  ;; and not necessary for Vertico, Selectrum, etc.
+  :hook (completion-list-mode . consult-preview-at-point-mode)
+
+  ;; The :init configuration is always executed (Not lazy)
+  :init
+
+  ;; Optionally configure the register formatting. This improves the register
+  ;; preview for `consult-register', `consult-register-load',
+  ;; `consult-register-store' and the Emacs built-ins.
+  (setq register-preview-delay 0
+        register-preview-function #'consult-register-format)
+
+  ;; Optionally tweak the register preview window.
+  ;; This adds thin lines, sorting and hides the mode line of the window.
+  (advice-add #'register-preview :override #'consult-register-window)
+
+  ;; Optionally replace `completing-read-multiple' with an enhanced version.
+  (advice-add #'completing-read-multiple :override #'consult-completing-read-multiple)
+
+  ;; Use Consult to select xref locations with preview
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+
+  ;; Configure other variables and modes in the :config section,
+  ;; after lazily loading the package.
+  :config
+
+  ;; Optionally configure preview. The default value
+  ;; is 'any, such that any key triggers the preview.
+  ;; (setq consult-preview-key 'any)
+  ;; (setq consult-preview-key (kbd "M-."))
+  ;; (setq consult-preview-key (list (kbd "<S-down>") (kbd "<S-up>")))
+  ;; For some commands and buffer sources it is useful to configure the
+  ;; :preview-key on a per-command basis using the `consult-customize' macro.
+  (consult-customize
+   consult-theme
+   :preview-key '(:debounce 0.2 any)
+   consult-ripgrep consult-git-grep consult-grep
+   consult-bookmark consult-recent-file consult-xref
+   consult--source-file consult--source-project-file consult--source-bookmark
+   :preview-key (kbd "M-."))
+
+  ;; Optionally configure the narrowing key.
+  ;; Both < and C-+ work reasonably well.
+  (setq consult-narrow-key "<") ;; (kbd "C-+")
+
+  ;; Optionally make narrowing help available in the minibuffer.
+  ;; You may want to use `embark-prefix-help-command' or which-key instead.
+  ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+  ;; Optionally configure a function which returns the project root directory.
+  ;; There are multiple reasonable alternatives to chose from.
+  ;;;; 1. project.el (project-roots)
+  (setq consult-project-root-function
+        (lambda ()
+          (when-let (project (project-current))
+            (car (project-roots project)))))
+  ;;;; 2. projectile.el (projectile-project-root)
+  ;; (autoload 'projectile-project-root "projectile")
+  ;; (setq consult-project-root-function #'projectile-project-root)
+  ;;;; 3. vc.el (vc-root-dir)
+  ;; (setq consult-project-root-function #'vc-root-dir)
+  ;;;; 4. locate-dominating-file
+  ;; (setq consult-project-root-function (lambda () (locate-dominating-file "." ".git")))
+)
+
+(use-package amx
+  :disabled t)
+
 
 
 (use-package avy
@@ -624,11 +947,9 @@ this command switches the keys so that they work as expected."
   :bind (("C-x g" . magit-status)
          ("C-x C-b" . magit-blame-addition))
   :config
-  (setq magit-diff-refine-hunk 'all)
-  (setq magit-log-auto-more t)
+  ;; (setq magit-diff-refine-hunk 'all)
+  ;; (setq magit-log-auto-more t)
 
-  (set-default 'magit-push-always-verify nil)
-  (set-default 'magit-revert-buffers 'silent)
   (set-default 'magit-no-confirm '(stage-all-changes
                                    unstage-all-changes))
 
@@ -685,7 +1006,10 @@ this command switches the keys so that they work as expected."
     (setq fill-column 72
           git-commit-summary-max-length 50
           git-commit-style-convention-checks '(overlong-summary-line non-empty-second-line)))
+
   (add-hook 'git-commit-mode-hook #'enforce-git-commit-conventions))
+
+
 
 (use-package git-timemachine)
 
@@ -743,12 +1067,12 @@ this command switches the keys so that they work as expected."
   ;; Always display suggestions in the tooltip, even if there is only
   ;; one. Also, don't display metadata in the echo area. (This
   ;; conflicts with ElDoc.)
-  (setq company-frontends '(company-pseudo-tooltip-frontend))
+  ;; (setq company-frontends '(company-pseudo-tooltip-frontend))
 
-  (setq company-continue-commands
-        (append company-continue-commands
-                '(comint-previous-matching-input-from-input
-                  comint-next-matching-input-from-input)))
+  ;; (setq company-continue-commands
+  ;;       (append company-continue-commands
+  ;;               '(comint-previous-matching-input-from-input
+  ;;                 comint-next-matching-input-from-input)))
 
   (global-company-mode +1)
 
@@ -991,14 +1315,17 @@ string).  It returns t if a new completion is found, nil otherwise."
          ("C-c j" . org-clock-goto))
 
   :hook ((org-mode . auto-fill-mode)
-         (org-mode . (lambda () (display-line-numbers-mode 0))))
+         (org-mode . (lambda () (display-line-numbers-mode 0)))
+         (org-mode . visual-line-mode)
+         (org-mode . variable-pitch-mode))
 
   :config
   (setq org-refile-targets '((org-agenda-files . (:maxlevel . 6))))
   (setq org-startup-indented t)         ;; Visually indent sections. This looks better for smaller files.
   (setq org-log-into-drawer t)          ;; State changes for todos and also notes should go into a Logbook drawer
-  (setq org-log-done 'time)             ;; Add closed date when todo goes to DONE state
+  (setq org-log-done 'note)             ;; Add closed date when todo goes to DONE state
   (setq org-support-shift-select t)     ;; Allow shift selection with arrows.
+  (setq org-hide-leading-stars nil)     ;; Allow shift selection with arrows.
 
   (setq org-fontify-quote-and-verse-blocks t) ;; Highlight quotes
 
@@ -1016,8 +1343,11 @@ string).  It returns t if a new completion is found, nil otherwise."
 
   (setq org-cycle-separator-lines 1)
 
+  (add-to-list 'org-structure-template-alist
+               '("s" . "src"))
+
   (setq org-todo-keywords
-        '((sequence "TODO(t)" "NEXT(n)" "IN REVIEW(r)" "|" "DONE(d)")
+        '((sequence "TODO(n)" "IN-PROGRESS(p)" "IN REVIEW(r)" "IN TESTING(t)" "|" "DONE(d)")
           (sequence "WAITING(w)" "HOLD(h)" "|" "CANCELLED(c)")))
 
   (require 'find-lisp)
@@ -1027,22 +1357,37 @@ string).  It returns t if a new completion is found, nil otherwise."
         org-agenda-files (find-lisp-find-files org-folder "\.org$"))
 
   (setq org-capture-templates
-        '(("t" "Todo" entry (file+headline (lambda () (concat org-folder "/todo.org")) "Todo")
-           "* TODO %? \n  %^t")
-          ("i" "Idea" entry (file+headline (lambda () (concat org-folder "/ideas.org")) "Ideas")
+        `(
+          ("t" "todo" entry (file ,(concat org-folder "/refile.org"))
+           "* TODO %?\n" :clock-in t :clock-resume t)
+          ("T" "todo with link" entry (file ,(concat org-folder "/refile.org"))
+           "* TODO %?\n%a\n" :clock-in t :clock-resume t)
+          ("e" "email" entry (file ,(concat org-folder "/refile.org"))
+           "* TODO %? Email: %:from on %:subject\nSCHEDULED: %t\n%U\n%a\n"
+           :clock-in t :clock-resume t :immediate-finish nil)
+          ("i" "Idea" entry (file+headline ,(concat org-folder "/refile.org"))
            "* %? \n %U")
-          ("l" "Learn" entry (file+headline (lambda () (concat org-folder "/learn.org" )) "Learn")
+          ("j" "Journal entry" entry (file+olp+datetree ,(concat org-folder "/journal.org"))
+           "* %?\n" :clock-in t :clock-resume t)
+          ("J" "Journal with link" entry (file+olp+datetree ,(concat org-folder "/journal.org"))
+           "* %?\n%a\n" :clock-in t :clock-resume t)
+          ("l" "Learn" entry (file+headline ,(concat org-folder "/refile.org"))
            "* %? \n")
-          ("w" "Ticket" entry (file+headline (lambda () (concat org-folder "/nezasa.org")) "Tickets")
-           "* %? \n")
-          ("n" "Project note" entry (file+headline (lambda () (concat org-folder "/nezasa.org")) "Project notes")
-           "* %? \n")))
-          ;; ("m" "Check movie" entry (file+headline (lambda () (concat org-folder "/check.org")) "Movies")
-          ;;  "* %? %^g"))
-          ;; ("n" "Check book" entry (file+headline (lambda () (concat org-folder "/check.org")) "Books")
-          ;;  "* %^{book name} by %^{author} %^g")))
+          ("n" "note" entry (file ,(concat org-folder "/refile.org"))
+           "* %? :NOTE:\n%a\n" :clock-in t :clock-resume t)
+          ("w" "org-protocol" entry (file ,(concat org-directory "/refile.org"))
+           "* TODO Review %c\n%U\n" :immediate-finish t)
+          ("p" "Protocol" entry (file+headline ,(concat org-folder "/refile.org") "Refile")
+           "* %^{Title}\nSource: %u, %c\n #+BEGIN_QUOTE\n%i\n#+END_QUOTE\n\n\n%?")
+          ("L" "Protocol Link" entry (file+headline ,(concat org-folder "/refile.org") "Refile")
+           "* %? [[%:link][%:description]] \nCaptured On: %U")
+          ))
 
-  (use-feature org-inlinetask)
+  (org-babel-do-load-languages 'org-babel-load-languages
+                               '((shell . t)))
+
+  (use-feature org-inlinetask
+    :demand t)
 
   (use-feature org-protocol
     :demand t)
@@ -1053,6 +1398,17 @@ string).  It returns t if a new completion is found, nil otherwise."
 
   (use-package org-pomodoro
     :demand t))
+
+(use-package neuron-mode
+  :demand t
+  :hook (neuron-mode . company-neuron-setup)
+  :config
+  (setq neuron-default-zettelkasten-directory "~/Sync/notes"))
+
+  (use-package writegood-mode
+    :bind ("C-c g" . writegood-mode)
+    :config
+    (add-to-list 'writegood-weasel-words "actionable"))
 
 (use-package deft
   :demand t
@@ -1066,11 +1422,18 @@ string).  It returns t if a new completion is found, nil otherwise."
         deft-use-filename-as-title nil
         deft-use-filter-string-for-filename t))
 
+;; Make bug references clickable (redirecting to bug tracker, jira in this case)
+(use-feature bug-reference
+  :demand t
+  :hook (org-mode . bug-reference-mode)
+  :config
+    (setq bug-reference-bug-regexp "\\(NTP-\\([0-9]\\{5\\}\\)\\)"
+          bug-reference-url-format "https://nezasa.atlassian.net/browse/NTP-%s"))
+
 (global-set-key (kbd "C-x i") (lambda () (interactive) (find-file "~/Sync/org/inbox.org")))
 (global-set-key (kbd "C-x t") (lambda () (interactive) (find-file "~/Sync/org/todo.org")))
 
 (use-package olivetti
-  :disabled t
   :demand t
   :hook (org-mode . olivetti-mode)
   :custom (olivetti-body-width 80))
@@ -1078,7 +1441,9 @@ string).  It returns t if a new completion is found, nil otherwise."
 ;; Open config file by pressing C-x and then C
 (global-set-key (kbd "C-x C") (lambda () (interactive) (find-file "~/.emacs.d/init.el")))
 
-(use-package wgrep)
+(use-package wgrep
+  :commands wgrep-change-to-wgrep-mode
+  :config (setq wgrep-auto-save-buffer t))
 
 (use-package yasnippet
   :config
@@ -1132,119 +1497,43 @@ string).  It returns t if a new completion is found, nil otherwise."
         js2-highlight-external-variables t
         js2-idle-timer-delay 0.1))
 
-(use-package ruby-mode
-  :mode
-  (("\\.\\(rb\\|rabl\\|ru\\|builder\\|rake\\|thor\\|gemspec\\|jbuilder\\)\\'" . ruby-mode))
-  :interpreter "ruby"
-  :bind (("C-c C-d" . #'+ruby-add-debug-line))
-  :config
-  (setq ruby-indent-level 2
-        ruby-indent-tabs-mode nil)
-
-  (setq ruby-insert-encoding-magic-comment nil)
-  (setq enh-ruby-add-encoding-comment-on-save nil)
-
-  (subword-mode -1)
-
-  (defun +ruby-add-debug-line ()
-    (interactive)
-    (save-excursion
-      (end-of-line)
-      (smart-open-line)
-      (insert "binding.pry")
-      (indent-according-to-mode)))
-
-  (defun hippie-expand-ruby-symbols (orig-fun &rest args)
-    (if (eq major-mode 'ruby-mode)
-        (let ((table (make-syntax-table ruby-mode-syntax-table)))
-          (modify-syntax-entry ?: "." table)
-          (with-syntax-table table (apply orig-fun args)))
-      (apply orig-fun args)))
-  (advice-add 'hippie-expand :around #'hippie-expand-ruby-symbols)
-
-  (add-λ 'ruby-mode-hook
-    (setq-local projectile-tags-command "ripper-tags -R -f TAGS")))
-
-(defvar +ruby-rbenv-versions nil
-  "Available versions of ruby in rbenv.")
-
-(defvar-local +ruby-current-version nil
-  "The currently active ruby version.")
-
-(use-package rbenv
-  :hook (ruby-mode . rbenv-use-corresponding)
-  :config
-  (setq +ruby-rbenv-versions (split-string (shell-command-to-string "rbenv versions --bare") "\n" t))
-  (defun +detect-rbenv-version ()
-    "Detect the rbenv version for the current project and set the relevant
-environment variables."
-    (interactive)
-    (when-let* ((version-str (shell-command-to-string "ruby --version 2>&1 | cut -d' ' -f2")))
-      (message version-str)
-      (setq version-str (string-trim version-str)
-            +ruby-current-version version-str)
-      (when (member version-str +ruby-rbenv-versions)
-        (setenv "RBENV_VERSION" version-str))))
-  (add-hook 'ruby-mode-hook #'+detect-rbenv-version)
-  (global-rbenv-mode 1))
-
-(use-package robe
-  :hook (ruby-mode . robe-mode)
-  :bind (([remap evil-jump-to-tag] . robe-jump)
-         ("C-c C-h" . robe-doc))
-  :config
-  (eval-after-load 'company
-    '(push 'company-robe company-backends)))
-
-(use-package rspec-mode
-  :after ruby-mode
-  :bind
-  ("s-R" . rspec-rerun)
-  :config
-  (with-eval-after-load 'yasnippet
-    (rspec-install-snippets)))
-
-(use-package inf-ruby
-  :hook ((ruby-mode . inf-ruby-minor-mode)
-         (compilation-filter . inf-ruby-auto-enter))
-  :config
-  (setq inf-ruby-console-environment "development")
-
-  (defcustom +ruby-extensions-file
-    "../console_extensions.rb"
-    "File loaded when a ruby console is started.
-Name is relative to the project root.")
-
-  (defun +run-ruby-console ()
-    (interactive)
-
-    (let ((default-directory (projectile-project-root))
-          (was-running (get-buffer-process inf-ruby-buffer)))
-      ;; This function automatically decides between starting
-      ;; a new console or visiting an existing one.
-      (inf-ruby-console-auto)
-      (when (and (not was-running)
-                 (get-buffer-process (current-buffer))
-                 (file-readable-p +ruby-extensions-file))
-        ;; If this brand new buffer has lots of lines then
-        ;; some exception probably happened.
-        (send-string
-         (get-buffer-process (current-buffer))
-         (concat "require '" +ruby-extensions-file
-                 "'\n")))))
-  (global-set-key (kbd "C-c M-j") #'+run-ruby-console))
-
 (use-package scala-mode
   :interpreter
-  ("scala" . scala-mode))
+    ("scala" . scala-mode))
 
 (use-package haskell-mode
   :config
   (setq haskell-process-suggest-remove-import-lines t  ; warnings for redundant imports etc
         haskell-process-auto-import-loaded-modules t))
 
-(use-package tuareg)
-(use-package merlin)
+(use-package tuareg
+  :config
+  (add-hook 'tuareg-mode-hook (lambda ()
+                                (progn
+                                  (define-key tuareg-mode-map (kbd "C-c C-s")
+                                    'utop)
+                                  (setq compile-command
+                                        "opam config exec corebuild ")))))
+
+(use-package utop
+  :hook (tuareg-mode . utop-minor-mode)
+  :config
+  (setq utop-command "opam config exec utop -- -emacs"
+        merlin-error-after-save nil))
+
+
+(use-package merlin
+  :hook (tuareg-mode . merlin-mode)
+  :config
+  (eval-after-load 'company
+    '(push 'merlin-company-backend company-backends))
+
+  (use-package flycheck-ocaml
+    :config
+    ;; Disable Merlin's own error checking
+    (setq merlin-error-after-save nil)
+    ;; Enable Flycheck checker
+    (flycheck-ocaml-setup)))
 
 (defun copy-buffer-file-name ()
   "Copy buffer's full path."
@@ -1660,7 +1949,16 @@ region-end is used."
     (global-set-key (kbd "C-c C--") 'camelcase-word-or-region)
     (global-set-key (kbd "C-c C-_") 'snakecase-word-or-region)))
 
-(use-package restclient)
+(use-package jq-mode
+  :demand t)
+
+(use-package restclient
+  :demand t
+  :mode (("\\.http\\'" . restclient-mode))
+  :straight (restclient :type git :host github :repo
+  "pashky/restclient.el"
+  :files ("restclient*.el")))
+
 (use-package ag)
 
 ;; =======
@@ -1673,7 +1971,8 @@ region-end is used."
 (when *is-linux* (menu-bar-mode -1))
 (tool-bar-mode -1)
 (scroll-bar-mode -1)
-(blink-cursor-mode -1)
+(blink-cursor-mode +1)
+(setq cursor-type 'bar)
 
 ;; mode line settings
 (line-number-mode t)
@@ -1709,10 +2008,9 @@ region-end is used."
 
 ;; Load custom themes
 (setq custom-theme-directory (concat user-emacs-directory "themes"))
-(dolist
-    (path (directory-files custom-theme-directory t "\\w+"))
-  (when (file-directory-p path)
-    (add-to-list 'custom-theme-load-path path)))
+(when (file-directory-p custom-theme-directory)
+      (add-to-list 'custom-theme-load-path custom-theme-directory)
+      (add-to-list 'load-path custom-theme-directory))
 
 (defun +disable-themes ()
   "Disable all active themes."
@@ -1727,47 +2025,44 @@ region-end is used."
 
 (when *is-mac*
   ;; Render thinner fonts
-  (setq ns-use-thin-smoothing nil)
+  (setq ns-use-thin-smoothing t)
   ;; Don't open a file in a new frame
   (setq ns-pop-up-frames nil))
 
 (use-package doom-themes
-  :demand t)
-
-;; (use-package modus-operandi-theme
-;;   :demand t
-;;   :config
-;;   (load-theme 'modus-operandi t))
-
-;; (use-package modus-vivendi-theme
-  ;; :demand t
-  ;; :config
-  ;; (load-theme 'modus-vivendi t))
-
-(use-package jbeans-theme
-  :demand t
   :config
-  (load-theme 'jbeans t))
+  (load-theme 'doom-flatwhite t))
 
-;; (setq +font (font-spec :family "Roboto Mono Light" :height 200))
-;; (setq +font (font-spec :family "DroidSansMono Nerd Font" :height 200))
-;; (setq +font-family "Menlo")
-;; (setq +font-family "Hack Nerd Font")
-(setq +font-family "JetBrainsMono Nerd Font")
-;; (setq +font-family "SF Mono")
-(setq +font-size 230)
-(setq +font (font-spec :family +font-family :height +font-size))
+(load-theme 'tomorrow-night t)
 
-(let ((font +font))
-  (set-frame-font font)
-  (add-to-list 'default-frame-alist
-               `(font . ,font)))
+;; (setq +font "LiterationMono Nerd Font")
+;; (setq +font "Inconsolata Nerd Font")
+;; (set-frame-font (concat +font "-" (number-to-string (/ +font-size 10))))
+;; (setq +font "Roboto Mono")
+(setq +font "SFMono Nerd Font")
+(setq +font "Iosevka Custom")
+(setq +font "JetBrainsMonoMedium Nerd Font")
+;; (setq +font "IBM Plex Mono")
+(setq +font-size 220)
 
+(set-face-attribute 'default nil
+                    :font +font
+                    :weight 'normal
+                    :width 'condensed
+                    :height +font-size)
 
-(set-face-attribute 'default nil :family +font-family :height +font-size)
-(set-face-attribute 'fixed-pitch nil :family +font-family :height +font-size)
-(set-face-attribute 'variable-pitch nil :family "Libre Baskerville" :height +font-size)
-(set-face-attribute 'variable-pitch nil :family "Spectral" :height +font-size)
+;; Set the fixed pitch face
+(set-face-attribute 'fixed-pitch nil
+                    :font +font
+                    :weight 'normal
+                    :width 'condensed
+                    :height +font-size)
+
+;; Set the variable pitch face
+(set-face-attribute 'variable-pitch nil
+                    :font "Overpass Nerd Font"
+                    :height 260
+                    :weight 'regular)
 
 ;; Prune the build cache for straight.el; this will prevent it from
 ;; growing too large. Do this after the final hook to prevent packages

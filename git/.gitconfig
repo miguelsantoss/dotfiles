@@ -1,0 +1,16 @@
+[user]
+	name = Miguel Santos
+	email = miguel.santos@nezasa.com
+[pull]
+	rebase = merges
+[alias]
+	p = push
+	r = !git branch --sort=-committerdate -v
+	ll = log --oneline
+	last = log -1 HEAD --stat
+	rs = "!f() { git reflog | egrep -io 'moving from ([^[:space:]]+)' | awk '{ print $3 }' | awk ' !x[$0]++' | head -n${1-10}; }; f"
+	rc = "!f() { git branch --sort=-committerdate -v | sed 's/* /  /' | fzf-tmux -d 15 | awk '{ print $1 }' |  xargs git checkout; }; f"
+[help]
+	autocorrect = 20
+[github]
+	user = miguelsantoss

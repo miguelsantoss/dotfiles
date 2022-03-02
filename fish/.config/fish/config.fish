@@ -1,56 +1,68 @@
 set fish_greeting ""
 
-set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin /usr/local/opt/imagemagick@5/bin $PATH
+set -x EDITOR nvim
 
-set -x -U OBJC_DISABLE_INITIALIZE_FORK_SAFETY YES
-set -x -U RUBY_CONFIGURE_OPTS --with-jemalloc
+set -gx PATH ~/bin /usr/local/bin ~/Library/Python/3.7/bin $PATH
+set -gx PATH /usr/local/opt/mongodb-community@4.4/bin $PATH
+
+set -gx JAVA_HOME (/usr/libexec/java_home -v11)
+set -gx JAVA_HOME /Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
+
+# graalvm
+# set -gx GRAALVM_HOME /Library/Java/JavaVirtualMachines/graalvm-ce-java16-21.2.0/Contents/Home/
+# set -gx GRAALVM_HOME /Library/Java/JavaVirtualMachines/graalvm-ce-java17-21.3.0/Contents/Home/
+set -gx GRAALVM_HOME /Library/Java/JavaVirtualMachines/graalvm-ce-java11-21.2.0/Contents/Home/
+set -gx PATH $GRAALVM_HOME/bin $PATH
+set -gx JAVA_HOME $GRAALVM_HOME
+
+# set -gx NVM_DIR $HOME/.nvm
+
+set -gx DUMP_DIR $HOME/src/dump/
 
 if type -q go
   set -gx PATH (go env GOPATH)/bin $PATH
   set -x -U GOPATH $HOME/go
 end
 
-alias ls "ls -hF"
-alias ll "ls -lahF"
-
-alias "cd.." "cd ../"
-alias mkdir "mkdir -p"
-
-alias ga "git add"
-alias gc "git commit -m"
-alias gs "git status"
-alias gd "git diff"
-alias gf "git fetch"
-alias gm "git merge"
-alias gr "git rebase"
-alias gp "git push"
-alias gu "git unstage"
-alias gco "git checkout"
-alias gpr "hub pull-request"
-
-alias v "nvim"
-alias setclip "xclip -selection c"
-alias getclip "xclip -selection c -o"
-
-alias be "bundle exec"
-alias mg "bundle exec rake db:migrate"
-alias mt "env RAILS_ENV=test bundle exec rake db:drop db:create db:migrate"
-
-alias c "env RAILS_ENV=test bundle exec cucumber -p circle"
-alias cs "env RAILS_ENV=test env SKIP_WEBPACK_IN_TESTS=true bundle exec cucumber -p circle"
-alias cf "env RAILS_ENV=test env FORCE_WEBPACK_BUILD=true bundle exec cucumber -p circle"
-alias cb "env IN_BROWSER=selenium_chrome env RAILS_ENV=test bundle exec cucumber -p circle"
-
-alias dc "docker-compose"
-
-if type -q rbenv
-  status --is-interactive; and source (rbenv init -|psub)
-
-  set -gx PATH ~/.rbenv/bin $PATH
+if type -q fnm
+  fnm env | source
 end
 
-if type -q fnm
-  fnm env --multi | source
+if status --is-interactive
+  abbr -a -g ls "ls -hF"
+  abbr -a -g ll "ls -lahF"
+  
+  abbr -a -g "cd.." "cd ../"
+  abbr -a -g mkdir "mkdir -p"
+  
+  abbr -a -g ga "git add"
+  abbr -a -g gc "git commit -m"
+  abbr -a -g gs "git status"
+  abbr -a -g gd "git diff"
+  abbr -a -g gf "git fetch"
+  abbr -a -g gm "git merge"
+  abbr -a -g gr "git rebase"
+  abbr -a -g gp "git push"
+  abbr -a -g gu "git unstage"
+  abbr -a -g gco "git checkout"
+  abbr -a -g gpr "hub pull-request"
+  
+  abbr -a -g v "nvim"
+  abbr -a -g vim "nvim"
+  abbr -a -g setclip "xclip -selection c"
+  abbr -a -g getclip "xclip -selection c -o"
+  
+  abbr -a -g dc "docker-compose"
+  
+  abbr -a -g m "make"
+  abbr -a -g mdu "make docker-start"
+  abbr -a -g mds "make docker-stop"
+  abbr -a -g pd "make playdev PLAYDEV_ARGS=\"-mem 4096 -J-Xmx4096m -java-home $GRAALVM_HOME \""
+  abbr -a -g pdd "make playdevdebug PLAYDEV_ARGS=\"-mem 4096 -J-Xmx4096m -java-home $GRAALVM_HOME\""
+  abbr -a -g wo "make playdevworkeronly PLAYDEV_ARGS=\"-mem 4096 -J-Xmx4096m -java-home $GRAALVM_HOME\""
+  
+  abbr -a -g t "timew start"
+  abbr -a -g st "timew stop"
 end
 
 if type -q fasd

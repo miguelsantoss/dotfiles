@@ -1,20 +1,22 @@
-export GOPATH=~/Projects/go
-export PYENV_ROOT="$HOME/.pyenv"
+export EDITOR=nvim
 
-export PATH="/usr/local/opt/imagemagick@6/bin:$PATH"
-
-export PATH="$PYENV_ROOT/bin:$PATH"
 export PATH=$PATH:$HOME/bin
-export PATH=$PATH:$HOME/.rbenv/bin
-export PATH=$PATH:$HOME/.fnm
 export PATH=$PATH:$HOME/Library/Python/3.7/bin
-export PATH=$PATH:$(go env GOPATH)/bin
 
-export RUBY_CONFIGURE_OPTS=--with-jemalloc
+export JAVA_HOME=$(/usr/libexec/java_home -v11)
 
-eval "$(fnm env --multi)"
-eval "$(rbenv init -)"
-eval "$(pyenv init -)"
+export GRAALVM_HOME=/Library/Java/JavaVirtualMachines/graalvm-ce-java11-21.0.0.2/Contents/Home
+export PATH=$GRAALVM_HOME/bin:$PATH
+export JAVA_HOME=$GRAALVM_HOME
+
+export DUMP_DIR=$HOME/src/dump/
+
+export NVM_DIR="$HOME/.nvm"
+
+[ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/usr/local/opt/nvm/etc/bash_completion.d/nvm" ] && . "/usr/local/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+
+export PATH="/usr/local/opt/mongodb-community@4.4/bin:$PATH"
 
 # ls custom colors
 export LSCOLORS=ExFxBxDxCxegedabagacad
@@ -139,20 +141,22 @@ alias tree='tree -CAFa -I="CVS|*.*.package|.svn|.git|.hg|node_modules|bower_comp
 
 alias k="kak"
 alias v='nvim'
+alias vim='nvim'
 alias e="emacsclient -c"
 alias setclip="xclip -selection c"
 alias getclip="xclip -selection c -o"
 alias ctags="$(brew --prefix)/bin/ctags"
-alias be="bundle exec"
-alias rs="bundle exec rails server"
-alias rc="bundle exec rails console"
-alias mg="bundle exec rake db:migrate"
-alias mt="RAILS_ENV=test bundle exec rake db:drop && RAILS_ENV=test bundle exec rake db:create && RAILS_ENV=test bundle exec rake db:migrate"
 
-alias c="RAILS_ENV=test bundle exec cucumber -p circle"
-alias cb="RAILS_ENV=test IN_BROWSER=selenium_chrome bundle exec cucumber -p circle"
-alias cs="RAILS_ENV=test SKIP_WEBPACK_IN_TESTS=true bundle exec cucumber -p circle"
-alias cf="RAILS_ENV=test FORCE_WEBPACK_BUILD=true bundle exec cucumber -p circle"
+alias dc="docker-compose"
+alias m="make"
+alias du="make docker-start"
+alias dd="make docker-stop"
+alias pd="make playdev PLAYDEV_ARGS=\"-mem 4096 -J-Xmx4096m -java-home $GRAALVM_HOME \""
+alias pdd="make playdevdebug PLAYDEV_ARGS=\"-mem 4096 -J-Xmx4096m -java-home $GRAALVM_HOME\""
+alias wo="make playdevworkeronly PLAYDEV_ARGS=\"-mem 4095 -J-Xmx4096m -java-home $GRAALVM_HOME\""
+
+alias t="timew start"
+alias st="timew stop"
 
 ### Prompt Colors
 # Modified version of @gf3’s Sexy Bash Prompt
@@ -208,11 +212,16 @@ function parse_git_branch() {
   echo -e " ${ref#refs/heads/}"
 }
 
-export PS1="\[${MAGENTA}\]\u \[$RESET\]in \[$GREEN\]\w\[$RESET\]\$([[ -n \$(git branch 2> /dev/null) ]] && echo \" on \")\[$PURPLE\]\$(parse_git_branch)\[$RESET\] "
-export PS1="\[${host_name}\] λ \[$RESET\]\[$cwdcolor\]\w\[$RESET\]\[$branchcolor\]\$(parse_git_branch)\[$RESET\] "
+# export PS1="\[${MAGENTA}\]\u \[$RESET\]in \[$GREEN\]\w\[$RESET\]\$([[ -n \$(git branch 2> /dev/null) ]] && echo \" on \")\[$PURPLE\]\$(parse_git_branch)\[$RESET\] "
+# export PS1="\[${host_name}\] λ \[$RESET\]\[$cwdcolor\]\w\[$RESET\]\[$branchcolor\]\$(parse_git_branch)\[$RESET\] "
 export PS1="\[$cwdcolor\]\w\[$RESET\]\[$branchcolor\]\$(parse_git_branch)\[$RESET\] "
 
 ### Misc
 
 # Only show the current directory's name in the tab
 export PROMPT_COMMAND='echo -ne "\033]0;${PWD##*/}\007"'
+
+# Source Nix setup script
+. ~/.nix-profile/etc/profile.d/nix.sh
+
+# source /Users/miguelsantos/.opam/opam-init/init.sh > /dev/null 1> /dev/null || true
